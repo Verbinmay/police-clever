@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:latest
+    container_name: ${POLICE_DB_NAME}
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: ${POLICE_DB_NAME}
+      POSTGRES_USER: ${POLICE_DB_USER}
+      POSTGRES_PASSWORD: ${POLICE_DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - '${POLICE_DB_PORT}:5432'
+    networks:
+      - police_network
+    healthcheck:
+      test:
+        ['CMD-SHELL', 'pg_isready -U ${POLICE_DB_USER} -d ${POLICE_DB_NAME}']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+
+networks:
+  police_network:
+    driver: bridge
