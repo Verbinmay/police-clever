@@ -1,3 +1,4 @@
+import { BotService } from 'src/bot/bot.service';
 import type * as Td from 'tdlib-types';
 
 import { format } from '@formkit/tempo';
@@ -12,7 +13,6 @@ import { LastRepository } from '../../messages/last.repository';
 import { makerResponse } from '../../shared/utils/makerResponse';
 import { User } from '../users.entity';
 import { UsersRepository } from '../users.repository';
-import { UsersService } from '../users.service';
 
 export class GetMemberInfoCommand {
   constructor(public message: Td.message) {}
@@ -26,8 +26,8 @@ export class GetMemberInfoCase
 
   constructor(
     private readonly botRepository: BotRepository,
+    private readonly botService: BotService,
     private readonly chatsRepository: ChatsRepository,
-    private readonly usersService: UsersService,
     private readonly usersRepository: UsersRepository,
     private readonly lastRepository: LastRepository,
   ) {}
@@ -68,7 +68,7 @@ export class GetMemberInfoCase
   }
 
   private async findUserInfo(message: Td.message) {
-    const username: string = this.usersService.findAddedTextInMessage(message);
+    const username: string = this.botService.findAddedTextInMessage(message);
 
     const user: User | null =
       await this.usersRepository.findByUsername(username);

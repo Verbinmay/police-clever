@@ -4,6 +4,7 @@ import { Logger } from '@nestjs/common';
 import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
 
 import { BotRepository } from '../../bot/bot.repository';
+import { BotService } from '../../bot/bot.service';
 import { Chat } from '../../chats/chat.entity';
 import { ChatsRepository } from '../../chats/chats.repository';
 import { makerResponse } from '../../shared/utils/makerResponse';
@@ -19,6 +20,7 @@ export class SetAdminCase implements ICommandHandler<SetAdminCommand> {
 
   constructor(
     private readonly botRepository: BotRepository,
+    private readonly botService: BotService,
     private readonly chatsRepository: ChatsRepository,
     private readonly usersService: UsersService,
   ) {}
@@ -37,8 +39,7 @@ export class SetAdminCase implements ICommandHandler<SetAdminCommand> {
         message,
         chatId,
       );
-      const nickname: string =
-        this.usersService.findAddedTextInMessage(message);
+      const nickname: string = this.botService.findAddedTextInMessage(message);
 
       //Проверка админы назначают админов
       if (!this.usersService.checkRightsAdminsOnly(userId, chat)) {

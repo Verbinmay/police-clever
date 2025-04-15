@@ -4,6 +4,7 @@ import { Logger } from '@nestjs/common';
 import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
 
 import { BotRepository } from '../../bot/bot.repository';
+import { BotService } from '../../bot/bot.service';
 import { Chat } from '../../chats/chat.entity';
 import { ChatsRepository } from '../../chats/chats.repository';
 import { makerResponse } from '../../shared/utils/makerResponse';
@@ -19,6 +20,7 @@ export class SetNicknameCase implements ICommandHandler<SetNicknameCommand> {
 
   constructor(
     private readonly botRepository: BotRepository,
+    private readonly botService: BotService,
     private readonly chatsRepository: ChatsRepository,
     private readonly usersService: UsersService,
   ) {}
@@ -37,8 +39,7 @@ export class SetNicknameCase implements ICommandHandler<SetNicknameCommand> {
         message,
         chatId,
       );
-      const nickname: string =
-        this.usersService.findAddedTextInMessage(message);
+      const nickname: string = this.botService.findAddedTextInMessage(message);
 
       //Проверка, что юзер ставит сам себе ник или ему ставят админы
       if (

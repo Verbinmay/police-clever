@@ -3,10 +3,10 @@ import type * as Td from 'tdlib-types';
 import { Logger } from '@nestjs/common';
 import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
 
-import { makerResponse } from '../../shared/utils/makerResponse';
 import { BotRepository } from '../../bot/bot.repository';
 import { Chat } from '../../chats/chat.entity';
 import { ChatsRepository } from '../../chats/chats.repository';
+import { makerResponse } from '../../shared/utils/makerResponse';
 import { UsersService } from '../users.service';
 
 export class SetNormisCommand {

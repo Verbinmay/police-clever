@@ -1,3 +1,4 @@
+import { BotService } from 'src/bot/bot.service';
 import type * as Td from 'tdlib-types';
 
 import { Logger } from '@nestjs/common';
@@ -20,6 +21,8 @@ export class AddBirthdayCase implements ICommandHandler<AddBirthdayCommand> {
 
   constructor(
     private readonly botRepository: BotRepository,
+
+    private readonly botService: BotService,
     private readonly chatsRepository: ChatsRepository,
     private readonly usersService: UsersService,
     private readonly usersRepository: UsersRepository,
@@ -81,7 +84,7 @@ export class AddBirthdayCase implements ICommandHandler<AddBirthdayCommand> {
   }
 
   private getDateFromMessage(message: Td.message): Date | null {
-    const text: string = this.usersService.findAddedTextInMessage(message);
+    const text: string = this.botService.findAddedTextInMessage(message);
     // text '22.12.2023' | '22.12' | 'null'
     if (text === 'null') {
       return null;

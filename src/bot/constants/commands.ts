@@ -7,4 +7,5 @@ export const commandsBotMessages = {
   help: '/help',
   deleteMessages: '/deleteMessages',
   getBirthdays: '/getBirthdays',
+  status: '/status',
 };

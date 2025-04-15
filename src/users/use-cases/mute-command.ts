@@ -4,6 +4,7 @@ import { Logger } from '@nestjs/common';
 import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
 
 import { BotRepository } from '../../bot/bot.repository';
+import { BotService } from '../../bot/bot.service';
 import { Chat } from '../../chats/chat.entity';
 import { ChatsRepository } from '../../chats/chats.repository';
 import { makerResponse } from '../../shared/utils/makerResponse';
@@ -19,6 +20,7 @@ export class MuteCase implements ICommandHandler<MuteCommand> {
 
   constructor(
     private readonly botRepository: BotRepository,
+    private readonly botService: BotService,
     private readonly chatsRepository: ChatsRepository,
     private readonly usersService: UsersService,
   ) {}
@@ -84,7 +86,7 @@ export class MuteCase implements ICommandHandler<MuteCommand> {
   }
 
   private getMinutesFromMessage(message: Td.message): number {
-    const text: string = this.usersService.findAddedTextInMessage(message);
+    const text: string = this.botService.findAddedTextInMessage(message);
     return isNaN(parseInt(text)) ? 5 : parseInt(text);
   }
 

@@ -21,10 +21,12 @@ export class HelpCase implements ICommandHandler<HelpCommand> {
   });
   private readonly description = {
     help: 'все: список команд (help)',
+    status: 'все: статус бота |(status)',
     getInfo: 'все: получить информацию о пользователе |(getInfo ник)',
     addBio: 'все: добавить описание |(addBio описание)',
     addBirthday:
       'все: добавить дату рождения |(addBirthday 22.12.2023 или 22.12 или null) - на реплай',
+    getBirthdays: 'все: получить список дней рождения |(getBirthdays)',
     getAdminsList: 'все: получить список админов |(getAdminsList)',
     setName: 'все: добавить подпись |(setName имя) - на реплай',
     setNormis: 'все: сделать обычным |(setNormis) - на реплай',
@@ -34,7 +36,6 @@ export class HelpCase implements ICommandHandler<HelpCommand> {
     createChat: 'owner: создать чат |(запрещено)',
     getMembers: 'owner: получить список участников |(запрещено)',
     deleteMessages: 'owner: удалить сообщения за 3 часа |(запрещено)',
-    getBirthdays: 'все: получить список дней рождения |(getBirthdays)',
   };
 
   constructor(private readonly botRepository: BotRepository) {

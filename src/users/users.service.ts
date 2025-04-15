@@ -39,17 +39,6 @@ export class UsersService {
 
     return repliedUserId;
   }
-  findAddedTextInMessage(message: Td.message): string {
-    const text: string = (message.content as Td.messageText).text.text;
-
-    const info = text.split(' ');
-    let customTitle = 'товарищ';
-    if (info.length >= 2) {
-      const [, ...rest] = text.split(' ');
-      customTitle = rest.join(' ');
-    }
-    return customTitle;
-  }
 
   async restoreUserRights(muteInfo: MuteInfo) {
     if (muteInfo.isAdmin) {

@@ -15,7 +15,7 @@ import { AppService } from './app.service';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-    CqrsModule,
+    CqrsModule.forRoot(),
     BotModule,
     UsersModule,
     DbModule,
