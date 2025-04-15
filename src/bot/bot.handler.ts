@@ -13,7 +13,8 @@ import { YesNoCommand } from './use-cases/yes-no-command';
 export class BotHandler {
   constructor(private readonly commandBus: CommandBus) {}
 
-  @OnEvent([`/${commandsBotWords.yes}`, `/${commandsBotWords.no}`])
+  @OnEvent(`/${commandsBotWords.yes}`)
+  @OnEvent(`/${commandsBotWords.no}`)
   async handleSetAdmin(update: Td.updateNewMessage) {
     const message: Td.message = update.message;
     await this.commandBus.execute(new YesNoCommand(message));
