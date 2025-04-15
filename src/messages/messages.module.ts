@@ -8,9 +8,10 @@ import { MessageDB } from '../db/entities/messageDB.entity';
 import { LastRepository } from './last.repository';
 import { MessagesHandler } from './messages.handler';
 import { MessagesRepository } from './messages.repository';
+import { DeleteMessageCase } from './use-cases/delete-message-command';
 import { SaveMessageCase } from './use-cases/save-message-command';
 
-const useCases = [SaveMessageCase];
+const useCases = [SaveMessageCase, DeleteMessageCase];
 @Module({
   imports: [
     TypeOrmModule.forFeature([MessageDB, LastDB]),
