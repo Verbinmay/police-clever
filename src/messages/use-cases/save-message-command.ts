@@ -5,7 +5,6 @@ import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
 
 import { Chat } from '../../chats/chat.entity';
 import { ChatsRepository } from '../../chats/chats.repository';
-import { LastDB } from '../../db/entities/lastDB.entity';
 import { makerResponse } from '../../shared/utils/makerResponse';
 import { CreateMessageDto } from '../dto/create-message-dto';
 import { LastRepository } from '../last.repository';
@@ -85,9 +84,7 @@ export class SaveMessageCase implements ICommandHandler<SaveMessageCommand> {
   }
 
   private async saveLast(idTg: number) {
-    const newLastEntity = new LastDB();
-    newLastEntity.idTg = idTg.toString();
-    newLastEntity.date = new Date();
+    const newLastEntity = { idTg: idTg.toString(), date: new Date() };
     const last = await this.lastRepository.save(newLastEntity);
     if (!last) {
       throw new Error('Failed to save last message');
