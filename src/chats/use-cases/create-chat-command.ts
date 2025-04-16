@@ -1,6 +1,7 @@
 import type * as Td from 'tdlib-types';
 
 import { Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
 
 import { BotRepository } from '../../bot/bot.repository';
@@ -19,6 +20,7 @@ export class CreateChatCase implements ICommandHandler<CreateChatCommand> {
   constructor(
     private readonly chatsRepository: ChatsRepository,
     private readonly botRepository: BotRepository,
+    private readonly configService: ConfigService,
   ) {}
 
   async execute(command: CreateChatCommand) {
@@ -29,19 +31,11 @@ export class CreateChatCase implements ICommandHandler<CreateChatCommand> {
         .user_id;
 
       //Проверка, может уже есть такой
-      const chat: Chat | null = await this.chatsRepository.findByChatId(
-        chatId.toString(),
-      );
-      if (chat) {
-        return makerResponse(0);
-      }
+      await this.findChat(chatId);
+      const ownerId = await this.findOwnerId(chatId);
 
       //Проверка, что владелец запросил команду и что это не личный чат
-      const ownerId = await this.findOwnerId(chatId);
-      //TODO: убрать хардкод
-      if (ownerId !== userId || ownerId !== 424027533) {
-        throw new Error('User is not owner');
-      }
+      this.checkRights(ownerId, userId);
 
       //Топики
       const forums: Td.forumTopics | null =
@@ -53,6 +47,21 @@ export class CreateChatCase implements ICommandHandler<CreateChatCommand> {
     } catch (e) {
       this.logger.error(e);
       return makerResponse(0);
+    }
+  }
+  private async findChat(chatId: number): Promise<Chat> {
+    const chat: Chat | null = await this.chatsRepository.findByChatId(
+      chatId.toString(),
+    );
+    if (!chat) {
+      throw new Error('Chat not found');
+    }
+    return chat;
+  }
+  private checkRights(ownerId: number, userId: number) {
+    const OI = Number(this.configService.get('POLICE_DEVOPS_USER_ID'));
+    if (ownerId !== userId || ownerId !== OI) {
+      throw new Error('User is not owner');
     }
   }
 

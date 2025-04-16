@@ -59,6 +59,7 @@ export class ChatsRepository implements IChatsRepository {
     chatDB.followedThreadIds = domain.followedThreadIds;
     chatDB.adminsIds = domain.adminsIds;
     chatDB.id = domain.id;
+    chatDB.mainThreadId = domain.mainThreadId;
     return chatDB;
   }
 }

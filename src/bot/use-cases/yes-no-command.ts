@@ -43,7 +43,7 @@ export class YesNoCase implements ICommandHandler<YesNoCommand> {
         return makerResponse(1);
       }
 
-      const answer = this.createAnswerText(text);
+      const answer = this.createAnswerText(text.toLowerCase());
 
       await this.botRepository.sendMessage(
         chatId,

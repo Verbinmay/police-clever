@@ -20,6 +20,7 @@ export class HelpCase implements ICommandHandler<HelpCommand> {
     ...commandsBotMessages,
   });
   private readonly description = {
+    Реван: 'все: Реван |(Реван)',
     help: 'все: список команд (help)',
     status: 'все: статус бота |(status)',
     getInfo: 'все: получить информацию о пользователе |(getInfo ник)',
@@ -36,7 +37,7 @@ export class HelpCase implements ICommandHandler<HelpCommand> {
     createChat: 'owner: создать чат |(запрещено)',
     getMembers: 'owner: получить список участников |(запрещено)',
     deleteMessages: 'owner: удалить сообщения за 3 часа |(запрещено)',
-    Реван: 'owner: Реван |(запрещено)',
+    mainThread: 'owner: установить основной топик |(запрещено)',
   };
 
   constructor(private readonly botRepository: BotRepository) {

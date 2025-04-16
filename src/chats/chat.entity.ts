@@ -6,6 +6,7 @@ export class Chat {
   id: string;
   chatId: string;
   hasThreads: boolean;
+  mainThreadId: string;
   followHashtags: boolean;
   followedThreadIds: string[];
   ownerId: string;
@@ -17,6 +18,7 @@ export class Chat {
       followHashtags: boolean;
       followedThreadIds: string[];
       adminsIds: string[];
+      mainThreadId: string;
     },
   ) {
     this.id = dto.id;
@@ -26,6 +28,7 @@ export class Chat {
     this.followedThreadIds = dto.followedThreadIds;
     this.ownerId = dto.ownerId;
     this.adminsIds = dto.adminsIds;
+    this.mainThreadId = dto.mainThreadId;
   }
 
   static create(data: CreateChatDto): Chat {
@@ -36,6 +39,7 @@ export class Chat {
       followHashtags: false,
       followedThreadIds: [],
       adminsIds: [],
+      mainThreadId: '0',
     });
   }
 }

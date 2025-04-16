@@ -7,6 +7,7 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { commandsBotMessages } from '../bot/constants/commands';
 import { CreateChatCommand } from './use-cases/create-chat-command';
 import { GetAdminsListCommand } from './use-cases/get-admins-list-command';
+import { MainThreadCommand } from './use-cases/main-thread-command';
 
 @Injectable()
 export class ChatsHandler {
@@ -22,5 +23,10 @@ export class ChatsHandler {
   async handleGetAdminsList(update: Td.updateNewMessage) {
     const message: Td.message = update.message;
     await this.commandBus.execute(new GetAdminsListCommand(message));
+  }
+  @OnEvent(commandsBotMessages.mainThread)
+  async handleMainTread(update: Td.updateNewMessage) {
+    const message: Td.message = update.message;
+    await this.commandBus.execute(new MainThreadCommand(message));
   }
 }

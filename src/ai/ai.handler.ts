@@ -3,10 +3,12 @@ import type * as Td from 'tdlib-types';
 import { Controller } from '@nestjs/common';
 import { CommandBus } from '@nestjs/cqrs';
 import { OnEvent } from '@nestjs/event-emitter';
+import { Cron } from '@nestjs/schedule';
 
 import { partsOfCommands } from '../bot/constants/partsOfCommands';
 import { tdcConstants } from '../bot/constants/tdcConstants';
 import { RandomAnswerCommand } from './use-cases/create-random-message-command';
+import { HoroscopeCommand } from './use-cases/horoscope-command';
 
 @Controller('ai')
 export class AiHandler {
@@ -30,6 +32,12 @@ export class AiHandler {
       const message: Td.message = update.message;
       await this.commandBus.execute(new RandomAnswerCommand(message));
     }
+  }
+
+  @Cron('0 0 7 * * *') // Каждый день в 7:00
+  async handleHoroscope() {
+    console.log('Гороскоп');
+    await this.commandBus.execute(new HoroscopeCommand());
   }
 
   private hasTries(): boolean {

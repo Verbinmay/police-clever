@@ -1,5 +1,6 @@
 export const commandsBotMessages = {
   createChat: '/createChat',
+  mainThread: '/mainThread',
   getMembers: '/getMembers',
   setNormis: '/setNormis',
   getAdminsList: '/getAdminsList',

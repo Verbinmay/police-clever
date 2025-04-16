@@ -14,8 +14,9 @@ import { AiRepository } from './ai.repository';
 import { AiService } from './ai.service';
 import { LINKS } from './constants/links';
 import { RandomAnswerCase } from './use-cases/create-random-message-command';
+import { HoroscopeCase } from './use-cases/horoscope-command';
 
-const useCases = [RandomAnswerCase];
+const useCases = [RandomAnswerCase, HoroscopeCase, HoroscopeCase];
 @Module({
   imports: [BotModule, ChatsModule, MessagesModule, UsersModule, CqrsModule],
   controllers: [],

@@ -16,4 +16,6 @@ export class ChatDB {
   ownerId: string;
   @Column({ nullable: false, type: 'simple-array' })
   adminsIds: string[];
+  @Column({ nullable: false, default: '0' })
+  mainThreadId: string;
 }
