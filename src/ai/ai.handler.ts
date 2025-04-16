@@ -7,12 +7,16 @@ import { Cron } from '@nestjs/schedule';
 
 import { partsOfCommands } from '../bot/constants/partsOfCommands';
 import { tdcConstants } from '../bot/constants/tdcConstants';
+import { EventsFilterService } from '../bot/events.filter.service';
 import { RandomAnswerCommand } from './use-cases/create-random-message-command';
 import { HoroscopeCommand } from './use-cases/horoscope-command';
 
 @Controller('ai')
 export class AiHandler {
-  constructor(private readonly commandBus: CommandBus) {}
+  constructor(
+    private readonly commandBus: CommandBus,
+    private readonly eventsFilterService: EventsFilterService,
+  ) {}
   private counter = 1;
   private lastUsed: number;
 
@@ -28,7 +32,8 @@ export class AiHandler {
 
   @OnEvent(tdcConstants.messageText)
   async handleAiAnswer(update: Td.updateNewMessage) {
-    if (this.gacha()) {
+    const isActive = this.eventsFilterService.isInstanceActive();
+    if (isActive && this.gacha()) {
       const message: Td.message = update.message;
       await this.commandBus.execute(new RandomAnswerCommand(message));
     }

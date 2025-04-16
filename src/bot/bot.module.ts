@@ -51,6 +51,6 @@ const useCases = [YesNoCase, HelpCase, DevEnableCase, StatusCase];
     BotHandler,
     BotRepository,
   ],
-  exports: [BotRepository, BotService],
+  exports: [BotRepository, BotService, EventsFilterService],
 })
 export class BotModule {}
