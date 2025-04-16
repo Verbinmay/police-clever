@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
 
+import { utilSettings } from '../../bot/constants/utilSettings';
 import { makerResponse } from '../../shared/utils/makerResponse';
 import { MessagesRepository } from '../messages.repository';
 
@@ -18,7 +19,9 @@ export class DeleteMessageCase
 
   async execute() {
     try {
-      await this.messagesRepository.delete3HoursOldMessages();
+      await this.messagesRepository.deleteNHoursOldMessages(
+        utilSettings.deleteMessagesTimeInHours,
+      );
       makerResponse(1);
     } catch (e) {
       this.logger.error(e);
