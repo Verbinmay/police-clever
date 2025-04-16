@@ -48,9 +48,22 @@ export class MessagesRepository implements IMessagesRepository {
     }
   }
 
-  async delete3HoursOldMessages(): Promise<void> {
+  async findNLastMessagesInThread(chatId: string, threadId: string, n: number) {
     try {
-      const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
+      return await this.messagesRepository.find({
+        where: { chatId, threadId },
+        order: { createAt: 'DESC' },
+        take: n,
+      });
+    } catch (error) {
+      console.error(error);
+      return [];
+    }
+  }
+
+  async deleteNHoursOldMessages(n: number): Promise<void> {
+    try {
+      const threeHoursAgo = new Date(Date.now() - n * 60 * 60 * 1000);
       await this.messagesRepository.delete({
         createAt: LessThan(threeHoursAgo),
       });

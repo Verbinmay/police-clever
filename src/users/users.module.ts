@@ -44,6 +44,6 @@ const useCases = [
     MessagesModule,
   ],
   providers: [UsersRepository, UsersService, UsersHandler, ...useCases],
-  exports: [],
+  exports: [UsersRepository],
 })
 export class UsersModule {}

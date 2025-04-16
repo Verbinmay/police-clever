@@ -5,4 +5,5 @@ export const partsOfCommands = {
   addBio: '/addBio',
   addBirthday: '/addBirthday',
   getInfo: '/getInfo',
+  renia: 'Реван',
 };

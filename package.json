@@ -31,6 +31,7 @@
     "@nestjs/schedule": "^5.0.1",
     "@nestjs/typeorm": "^11.0.0",
     "cors": "^2.8.5",
+    "openai": "^4.94.0",
     "pg": "^8.14.1",
     "prebuilt-tdlib": "^0.1008045.0",
     "reflect-metadata": "^0.2.2",

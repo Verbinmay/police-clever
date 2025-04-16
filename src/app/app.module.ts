@@ -4,6 +4,7 @@ import { CqrsModule } from '@nestjs/cqrs';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
 
+import { AiModule } from '../ai/ai.module';
 import { BotModule } from '../bot/bot.module';
 import { ChatsModule } from '../chats/chats.module';
 import { DbModule } from '../db/db.module';
@@ -20,6 +21,7 @@ import { AppService } from './app.service';
     UsersModule,
     DbModule,
     MessagesModule,
+    AiModule,
     EventEmitterModule.forRoot({
       wildcard: true, // Для обработки событий с wildcard
       delimiter: '.', // Разделитель для namespace

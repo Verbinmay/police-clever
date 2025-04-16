@@ -36,6 +36,7 @@ export class HelpCase implements ICommandHandler<HelpCommand> {
     createChat: 'owner: создать чат |(запрещено)',
     getMembers: 'owner: получить список участников |(запрещено)',
     deleteMessages: 'owner: удалить сообщения за 3 часа |(запрещено)',
+    Реван: 'owner: Реван |(запрещено)',
   };
 
   constructor(private readonly botRepository: BotRepository) {
