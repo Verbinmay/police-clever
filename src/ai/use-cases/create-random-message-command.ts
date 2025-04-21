@@ -40,7 +40,9 @@ export class RandomAnswerCase implements ICommandHandler<RandomAnswerCommand> {
       );
 
       const promt = this.aiService.createPromt(
-        text.includes(partsOfCommands.renia) ? text : undefined,
+        text.includes(partsOfCommands.renia)
+          ? `${text} - тебе написали, ответь`
+          : undefined,
       );
 
       const answer: string = await this.getAiResponse(promt, dialogText);
