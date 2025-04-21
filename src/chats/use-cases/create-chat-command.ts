@@ -49,14 +49,13 @@ export class CreateChatCase implements ICommandHandler<CreateChatCommand> {
       return makerResponse(0);
     }
   }
-  private async findChat(chatId: number): Promise<Chat> {
+  private async findChat(chatId: number) {
     const chat: Chat | null = await this.chatsRepository.findByChatId(
       chatId.toString(),
     );
-    if (!chat) {
-      throw new Error('Chat not found');
+    if (chat) {
+      throw new Error('Chat found');
     }
-    return chat;
   }
   private checkRights(ownerId: number, userId: number) {
     const OI = Number(this.configService.get('POLICE_DEVOPS_USER_ID'));
