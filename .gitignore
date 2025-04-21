@@ -4,6 +4,7 @@
 /build
 /_td_files
 /_td_database
+/postgres_data
 
 # Logs
 logs

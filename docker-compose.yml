@@ -11,7 +11,7 @@ services:
       POSTGRES_USER: ${POLICE_DB_USER}
       POSTGRES_PASSWORD: ${POLICE_DB_PASSWORD}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - ./postgres_data:/var/lib/postgresql/data
     ports:
       - '${POLICE_DB_PORT}:5432'
     networks:
@@ -22,9 +22,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-
-volumes:
-  postgres_data:
 
 networks:
   police_network:
