@@ -5,6 +5,7 @@ import type { SettingsRepository } from "../../db/repositories/settings-reposito
 import type { TopicsRepository } from "../../db/repositories/topics-repository.ts";
 import { loadAiConfig } from "../../parts/ai-fun/config.ts";
 import { cooldownRemainingMinutes } from "../../parts/ai-fun/cooldown.ts";
+import { peekGachaCounter } from "../../parts/ai-fun/gacha.ts";
 import { getSummary } from "../../parts/ai-fun/summary.ts";
 
 /**
@@ -19,11 +20,16 @@ export function createTopicsRouter(chats: ChatsRepository, topics: TopicsReposit
 	router.get("/", async (_req, res) => {
 		const [allChats, allTopics, aiConfig] = await Promise.all([chats.listAll(), topics.listAll(), loadAiConfig(settings)]);
 
-		// Сводка — только для тем с включёнными AI-шутками, остальным она всё равно не собирается.
-		const summaries = await Promise.all(
-			allTopics.filter((t) => t.aiJokesEnabled).map(async (t) => [`${t.chatId}:${t.threadId}`, await getSummary(settings, t.chatId, t.threadId)] as const),
-		);
+		// Сводка и счётчик гачи — только для тем с включёнными AI-шутками,
+		// остальным они всё равно не собираются/не крутятся.
+		const aiTopics = allTopics.filter((t) => t.aiJokesEnabled);
+		const summaries = await Promise.all(aiTopics.map(async (t) => [`${t.chatId}:${t.threadId}`, await getSummary(settings, t.chatId, t.threadId)] as const));
 		const summaryByKey = new Map(summaries);
+
+		// Гача — вероятностная и может сработать раньше guaranteedAt (см.
+		// gacha.ts) — счётчик тут это "не позже чем через", а не точный таймер.
+		const gachaCounters = await Promise.all(aiTopics.map(async (t) => [`${t.chatId}:${t.threadId}`, await peekGachaCounter(settings, t.chatId, t.threadId)] as const));
+		const gachaCounterByKey = new Map(gachaCounters);
 
 		const topicsByChat = new Map<string, typeof allTopics>();
 		for (const topic of allTopics) {
@@ -55,7 +61,12 @@ export function createTopicsRouter(chats: ChatsRepository, topics: TopicsReposit
 		res.json(
 			chatsWithCounters.map((chat) => ({
 				...chat,
-				topics: (topicsByChat.get(chat.chatId) ?? []).map((t) => ({ ...t, summary: summaryByKey.get(`${t.chatId}:${t.threadId}`) ?? null })),
+				topics: (topicsByChat.get(chat.chatId) ?? []).map((t) => ({
+					...t,
+					summary: summaryByKey.get(`${t.chatId}:${t.threadId}`) ?? null,
+					gachaCounter: t.aiJokesEnabled ? (gachaCounterByKey.get(`${t.chatId}:${t.threadId}`) ?? 1) : null,
+					gachaGuaranteedAt: aiConfig.gachaGuaranteedAt,
+				})),
 			})),
 		);
 	});
