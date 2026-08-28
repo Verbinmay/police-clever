@@ -53,4 +53,20 @@ export class TopicsRepository {
 		Object.assign(existing, patch);
 		return this.repo.save(existing);
 	}
+
+	/**
+	 * Ручное имя темы — для команды /th (см. core/index.ts): Telegram
+	 * присылает имя темы только служебным сообщением при создании/
+	 * переименовании, для тем старше бота его неоткуда взять само по себе.
+	 * `wasUnset` — было ли имя пустым/другим до этого, чтобы хендлер мог
+	 * ответить "зарегистрировал" вместо "переименовал".
+	 */
+	async setName(chatId: string, threadId: string, name: string): Promise<{ topic: Topic; wasUnset: boolean } | null> {
+		const existing = await this.repo.findOneBy({ chatId, threadId });
+		if (!existing) return null;
+		const wasUnset = !existing.topicName;
+		existing.topicName = name;
+		const topic = await this.repo.save(existing);
+		return { topic, wasUnset };
+	}
 }
