@@ -46,6 +46,19 @@ export class AiUsageRepository {
 		return this.repo.countBy({ chatId, createdAt: MoreThanOrEqual(since) });
 	}
 
+	/**
+	 * Время самого старого AI-вызова в текущем скользящем окне 24ч (или
+	 * null, если вызовов не было) — по нему считается, когда именно
+	 * дневной кап на чат "разгрузится" хотя бы на один слот (для счётчика
+	 * в панели). Кап не сбрасывается разом в фиксированное время суток —
+	 * окно скользящее, поэтому и точка освобождения тоже "плавающая".
+	 */
+	async oldestCallInLast24h(chatId: string): Promise<Date | null> {
+		const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+		const row = await this.repo.findOne({ where: { chatId, createdAt: MoreThanOrEqual(since) }, order: { createdAt: "ASC" } });
+		return row?.createdAt ?? null;
+	}
+
 	/** Суммарная оценочная стоимость с начала текущего календарного месяца (UTC), по всем чатам — для глобального $ бюджета. */
 	async monthToDateCostUsd(): Promise<number> {
 		const since = startOfMonth();

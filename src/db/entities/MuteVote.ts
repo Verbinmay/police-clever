@@ -19,6 +19,8 @@ export interface MuteVote {
 	status: MuteVoteStatus;
 	startedAt: Date;
 	expiresAt: Date;
+	/** До какого момента действует мьют (только для status="muted") — считается от config.muteMinutes в момент мьюта. Используется, чтобы убирать из панели голосования, чей мьют уже сам истёк. */
+	mutedUntil: Date | null;
 }
 
 export const MuteVoteSchema = new EntitySchema<MuteVote>({
@@ -35,6 +37,7 @@ export const MuteVoteSchema = new EntitySchema<MuteVote>({
 		status: { type: "text", default: "open" },
 		startedAt: { type: "timestamptz", name: "started_at", createDate: true },
 		expiresAt: { type: "timestamptz", name: "expires_at" },
+		mutedUntil: { type: "timestamptz", name: "muted_until", nullable: true },
 	},
 	indices: [{ columns: ["chatId", "status"] }],
 });
