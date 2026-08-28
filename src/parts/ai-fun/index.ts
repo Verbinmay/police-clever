@@ -135,7 +135,9 @@ export function createAiFunPart(): PartDefinition {
 					await maybeUpdateSummary(aiClient, repos.messages, repos.settings, chatId, threadId, config, logger);
 				}
 
-				const isTriggered = config.triggerWords.some((word) => word && text.includes(word));
+				// Регистронезависимо — "Реван"/"реван"/"РЕВАН" все должны срабатывать одинаково.
+				const lowerText = text.toLowerCase();
+				const isTriggered = config.triggerWords.some((word) => word && lowerText.includes(word.toLowerCase()));
 				const wantsGacha = !isTriggered && (await rollGacha(repos.settings, chatId, threadId, config));
 				if (!isTriggered && !wantsGacha) return next();
 
