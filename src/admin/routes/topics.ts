@@ -5,7 +5,7 @@ import type { SettingsRepository } from "../../db/repositories/settings-reposito
 import type { TopicsRepository } from "../../db/repositories/topics-repository.ts";
 import { loadAiConfig } from "../../parts/ai-fun/config.ts";
 import { cooldownRemainingMinutes } from "../../parts/ai-fun/cooldown.ts";
-import { peekGachaCounter } from "../../parts/ai-fun/gacha.ts";
+import { peekGachaCounter, setGachaCounter } from "../../parts/ai-fun/gacha.ts";
 import { getSummary } from "../../parts/ai-fun/summary.ts";
 
 /**
@@ -89,6 +89,29 @@ export function createTopicsRouter(chats: ChatsRepository, topics: TopicsReposit
 			return;
 		}
 		res.json(updated);
+	});
+
+	/** Ручная правка счётчика гачи темы из панели — ускорить/отодвинуть гарантированный ответ, не дожидаясь реальных сообщений. */
+	router.put("/:chatId/:threadId/gacha-counter", async (req, res) => {
+		const { chatId, threadId } = req.params;
+		const { value } = req.body as { value?: number };
+		if (!chatId || !threadId) {
+			res.status(400).json({ error: "chatId/threadId обязательны" });
+			return;
+		}
+		if (typeof value !== "number" || !Number.isFinite(value)) {
+			res.status(400).json({ error: "value должен быть числом" });
+			return;
+		}
+
+		const topic = await topics.get(chatId, threadId);
+		if (!topic) {
+			res.status(404).json({ error: "Тема не найдена" });
+			return;
+		}
+
+		await setGachaCounter(settings, chatId, threadId, value);
+		res.json({ ok: true, value: Math.max(1, Math.floor(value)) });
 	});
 
 	return router;

@@ -41,3 +41,8 @@ export async function rollGacha(settings: SettingsRepository, chatId: string, th
 export async function peekGachaCounter(settings: SettingsRepository, chatId: string, threadId: string): Promise<number> {
 	return settings.get<number>(PART_ID, counterKey(chatId, threadId), 1);
 }
+
+/** Ручная правка счётчика из панели — ускорить или отодвинуть гарантированный ответ, не дожидаясь реальных сообщений. Минимум 1 (0 и отрицательные не имеют смысла — счётчик всегда "с какого сообщения считаем"). */
+export async function setGachaCounter(settings: SettingsRepository, chatId: string, threadId: string, value: number): Promise<void> {
+	await settings.set(PART_ID, counterKey(chatId, threadId), Math.max(1, Math.floor(value)));
+}
