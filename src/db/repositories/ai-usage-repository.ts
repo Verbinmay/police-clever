@@ -1,11 +1,16 @@
 import type { DataSource } from "typeorm";
-import { MoreThanOrEqual } from "typeorm";
-import { type AiUsageKind, AiUsageSchema } from "../entities/AiUsage.ts";
+import { LessThan, MoreThanOrEqual } from "typeorm";
+import { type AiUsage, type AiUsageKind, AiUsageSchema } from "../entities/AiUsage.ts";
 
 export interface RecordAiUsageInput {
 	chatId: string;
+	threadId: string;
 	kind: AiUsageKind;
+	tone: string | null;
 	provider: string;
+	promptText: string;
+	userContent: string;
+	replyText: string;
 	promptTokens: number;
 	completionTokens: number;
 	costUsd: number;
@@ -105,5 +110,20 @@ export class AiUsageRepository {
 			.getRawMany<{ chatId: string; calls: string; costUsd: string }>();
 
 		return rows.map((row) => ({ chatId: row.chatId, calls: Number(row.calls), costUsd: Number(row.costUsd) }));
+	}
+
+	/** Лог реальных AI-ответов (промпт+контекст+ответ) для панели — свежие сначала, опционально по чату. */
+	async listRecent(limit = 50, chatId?: string): Promise<AiUsage[]> {
+		return this.repo.find({
+			where: chatId ? { chatId } : {},
+			order: { createdAt: "DESC" },
+			take: limit,
+		});
+	}
+
+	/** Чистка старых записей — тексты промпта/контекста/ответа занимают заметно больше места, чем голые счётчики. */
+	async pruneOlderThan(days: number): Promise<void> {
+		const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+		await this.repo.delete({ createdAt: LessThan(cutoff) });
 	}
 }

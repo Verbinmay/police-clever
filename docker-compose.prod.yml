@@ -1,9 +1,16 @@
-# Прод: один сервис `bot` — БД и Caddy общие для сервера (~/server-infra/db,
+# Прод: один сервис — БД и Caddy общие для сервера (~/server-infra/db,
 # ~/server-infra/edge), этот файл их не поднимает, только подключается к их
 # внешним сетям edge/db-net. Паттерн 1:1 из bots-platform. Образ собирается
 # на самом VPS деплой-скриптом, не этим compose-файлом.
+#
+# ВАЖНО: имя сервиса ниже НЕ должно быть `bot` — Docker Compose по умолчанию
+# регистрирует сетевой DNS-алиас = имя сервиса (а не только container_name).
+# В bots-platform сервис тоже называется `bot`, и оба контейнера сидят в
+# одной внешней сети `edge` — совпадение имени сервиса создавало вторую
+# DNS-запись для хоста "bot", указывающую на этот контейнер, и Caddy
+# резолвил bots.maiiimark.uk то на bots-platform, то на police-clever.
 services:
-  bot:
+  police-clever:
     container_name: police-clever-bot
     restart: unless-stopped
     image: ${BOT_IMAGE:-police-clever:prod}

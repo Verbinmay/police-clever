@@ -4,16 +4,27 @@ export type AiUsageKind = "trigger" | "gacha";
 
 /**
  * Один вызов AI (шутка по триггер-слову или пассивная гача) — под
- * статистику в панели: звонков/токенов/$ в день, по чатам. `provider` и
- * `costUsd` фиксируются на момент вызова (не пересчитываются задним
- * числом по текущим ценам) — так исторический отчёт не "уплывает" при
- * смене провайдера или правке цен в конфиге.
+ * статистику в панели (звонков/токенов/$ в день, по чатам) И под "лог
+ * ответов" (промпт + отправленный контекст + сам ответ), чтобы следить за
+ * тем, что реально генерит бот, прямо из админки. `provider` и `costUsd`
+ * фиксируются на момент вызова (не пересчитываются задним числом по
+ * текущим ценам) — так исторический отчёт не "уплывает" при смене
+ * провайдера или правке цен в конфиге.
  */
 export interface AiUsage {
 	id: string;
 	chatId: string;
+	threadId: string;
 	kind: AiUsageKind;
+	/** Категория тона (general/targeted/sarcasm/praise) — null для триггер-вызовов, там тон не выбирается. */
+	tone: string | null;
 	provider: string;
+	/** Системный промпт, реально отправленный модели (шаблон + сценарий/явный текст триггера). */
+	promptText: string;
+	/** "user"-сообщение — сводка + активные участники + сырой хвост диалога (см. dialog.ts). */
+	userContent: string;
+	/** Итоговый текст, отправленный в чат. */
+	replyText: string;
 	promptTokens: number;
 	completionTokens: number;
 	/** Оценочная стоимость вызова в $ по ценам провайдера на момент вызова. */
@@ -27,8 +38,13 @@ export const AiUsageSchema = new EntitySchema<AiUsage>({
 	columns: {
 		id: { type: "uuid", primary: true, generated: "uuid" },
 		chatId: { type: "text", name: "chat_id" },
+		threadId: { type: "text", default: "0", name: "thread_id" },
 		kind: { type: "text" },
+		tone: { type: "text", nullable: true },
 		provider: { type: "text", default: "deepseek" },
+		promptText: { type: "text", default: "", name: "prompt_text" },
+		userContent: { type: "text", default: "", name: "user_content" },
+		replyText: { type: "text", default: "", name: "reply_text" },
 		promptTokens: { type: "int", default: 0, name: "prompt_tokens" },
 		completionTokens: { type: "int", default: 0, name: "completion_tokens" },
 		costUsd: { type: "double precision", default: 0, name: "cost_usd" },

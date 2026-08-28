@@ -3,8 +3,8 @@ import type { AiConfig } from "./default-config.ts";
 
 const PART_ID = "ai";
 
-function counterKey(chatId: string): string {
-	return `gacha:${chatId}`;
+function counterKey(chatId: string, threadId: string): string {
+	return `gacha:${chatId}:${threadId}`;
 }
 
 function probabilityForCounter(curve: AiConfig["gachaCurve"], counter: number): number {
@@ -13,24 +13,26 @@ function probabilityForCounter(curve: AiConfig["gachaCurve"], counter: number): 
 }
 
 /**
- * Персистентная (на чат, переживает рестарт процесса) версия старой
- * in-memory гачи из `ai.handler.ts` — это чинит баг, который сам
- * пользователь отмечал (общий на все чаты счётчик в памяти).
+ * Персистентная (на тему, переживает рестарт процесса) версия старой
+ * in-memory гачи из `ai.handler.ts`. Счётчик на (chatId, threadId), а не
+ * только на chatId — иначе две разные темы одного чата с включёнными
+ * AI-шутками делили бы один счётчик, хотя это независимые разговоры.
  */
-export async function rollGacha(settings: SettingsRepository, chatId: string, config: AiConfig): Promise<boolean> {
-	const counter = await settings.get<number>(PART_ID, counterKey(chatId), 1);
+export async function rollGacha(settings: SettingsRepository, chatId: string, threadId: string, config: AiConfig): Promise<boolean> {
+	const key = counterKey(chatId, threadId);
+	const counter = await settings.get<number>(PART_ID, key, 1);
 
 	if (counter >= config.gachaGuaranteedAt) {
-		await settings.set(PART_ID, counterKey(chatId), 1);
+		await settings.set(PART_ID, key, 1);
 		return true;
 	}
 
 	const probability = probabilityForCounter(config.gachaCurve, counter);
 	if (Math.random() < probability) {
-		await settings.set(PART_ID, counterKey(chatId), 1);
+		await settings.set(PART_ID, key, 1);
 		return true;
 	}
 
-	await settings.set(PART_ID, counterKey(chatId), counter + 1);
+	await settings.set(PART_ID, key, counter + 1);
 	return false;
 }

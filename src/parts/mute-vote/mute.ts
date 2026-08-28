@@ -31,3 +31,32 @@ export async function muteUser(telegram: Telegram, chatId: string, userId: strin
 		return false;
 	}
 }
+
+/** Снять мьют вручную (кнопка в панели, вкладка "Голосования") — полные права обратно, until_date=0. */
+export async function unmuteUser(telegram: Telegram, chatId: string, userId: string, logger: Logger): Promise<boolean> {
+	try {
+		await telegram.restrictChatMember(chatId, Number(userId), {
+			until_date: 0,
+			permissions: {
+				can_send_messages: true,
+				can_send_audios: true,
+				can_send_documents: true,
+				can_send_photos: true,
+				can_send_videos: true,
+				can_send_video_notes: true,
+				can_send_voice_notes: true,
+				can_send_polls: true,
+				can_send_other_messages: true,
+				can_add_web_page_previews: true,
+				can_change_info: false,
+				can_invite_users: true,
+				can_pin_messages: false,
+				can_manage_topics: false,
+			},
+		});
+		return true;
+	} catch (err) {
+		logger.warn("restrictChatMember (unmute) failed", { chatId, userId }, err);
+		return false;
+	}
+}

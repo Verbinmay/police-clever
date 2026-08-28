@@ -39,26 +39,34 @@ const API_KEYS: Record<ProviderId, string> = {
  * tone.ts) — плюс лёгкий бесплатный флейвор на "да"/"нет" (свой тумблер,
  * не расходует AI-бюджет, работает независимо от AI-шуток).
  *
- * Стоимость развязана с активностью чата и ограничена сразу с четырёх
- * сторон — и это касается ОБОИХ путей одинаково (позвали по имени или
- * сработала гача), кто угодно не может "разорить" владельца, просто зовя
- * бота по имени чаще:
- *  1. Контекст — бюджет по символам + роллинг-саммари (dialog.ts,
- *     summary.ts), а не "последние N сообщений".
- *  2. Персистентный общий кулдаун между ЛЮБЫМИ AI-ответами в чате
- *     (cooldown.ts).
- *  3. Дневной кап вызовов НА ЧАТ (AiConfig.dailyCallCapPerChat).
- *  4. Глобальный месячный $ потолок НА ВЕСЬ БОТ (AiConfig.monthlyBudgetUsd,
- *     см. budget.ts).
+ * Что на ЧАТ, а что на ТЕМУ — сознательно по-разному:
+ *  - Кулдаун между AI-ответами (cooldown.ts) и дневной кап
+ *    (dailyCallCapPerChat) — НА ВЕСЬ ЧАТ. Это рычаги стоимости: если бы
+ *    они были на тему, чат с 5 активными темами генерил бы в 5 раз больше
+ *    AI-ответов за то же время, чем чат с одной — ровно то, чего нельзя
+ *    допускать (иначе владельца легко "обонкротить", просто включив
+ *    AI-шутки в кучe тем).
+ *  - Счётчик гачи (gacha.ts) и роллинг-саммари (summary.ts) — НА ТЕМУ.
+ *    Это про "память"/атмосферу конкретного разговора, а не про деньги —
+ *    разные темы одного чата не должны путать контекст друг друга. Общий
+ *    кулдаун всё равно остаётся последним словом: даже если гача выиграла
+ *    сразу в двух темах, реально ответит только одна — вторая просто
+ *    "сгорит" молча.
+ *  - Глобальный месячный $ потолок (budget.ts) — НА ВЕСЬ БОТ, все чаты
+ *    вместе.
  *
  * Когда лимит исчерпан, но позвали ПО ИМЕНИ (не гачей) — вместо тишины
  * отправляется случайный стикер из заранее заданного стикерпака
- * (stickers.ts) со своим отдельным коротким кулдауном, чтобы спам
- * триггер-словом не превращался в спам стикерами.
+ * (stickers.ts) со своим отдельным коротким кулдауном (тоже на весь чат),
+ * чтобы спам триггер-словом не превращался в спам стикерами.
  *
  * Провайдер (DeepSeek/OpenAI) переключается в панели без передеплоя —
  * оба клиента собираются один раз при старте (если ключ задан в env), а
  * дальше на каждый вызов выбирается активный по AiConfig.provider.
+ *
+ * Каждый реальный AI-ответ (промпт + отправленный контекст + сам текст)
+ * пишется в AiUsage — это и есть "лог ответов" в панели ("Ответы AI"), не
+ * только счётчики токенов.
  */
 export function createAiFunPart(): PartDefinition {
 	return {
@@ -120,19 +128,20 @@ export function createAiFunPart(): PartDefinition {
 
 				const aiClient = getClient(config, config.provider);
 
-				// Обслуживание саммари не зависит от того, сработает ли шутка на
-				// этом конкретном сообщении — считает объём независимо. Без
-				// живого клиента (ключ не задан) просто пропускаем.
+				// Обслуживание саммари (на тему) не зависит от того, сработает ли
+				// шутка на этом конкретном сообщении — считает объём независимо.
+				// Без живого клиента (ключ не задан) просто пропускаем.
 				if (aiClient) {
 					await maybeUpdateSummary(aiClient, repos.messages, repos.settings, chatId, threadId, config, logger);
 				}
 
 				const isTriggered = config.triggerWords.some((word) => word && text.includes(word));
-				const wantsGacha = !isTriggered && (await rollGacha(repos.settings, chatId, config));
+				const wantsGacha = !isTriggered && (await rollGacha(repos.settings, chatId, threadId, config));
 				if (!isTriggered && !wantsGacha) return next();
 
 				if (!aiClient) return next(); // провайдер выбран, но ключ не настроен — уже залогировано выше
 
+				// Кулдаун и дневной кап — на весь чат (см. комментарий у функции), не на тему.
 				let blockedReason: "cooldown" | "daily_cap" | "monthly_budget" | null = null;
 				if (await isOnCooldown(repos.settings, chatId, config.cooldownMinutes)) blockedReason = "cooldown";
 				else if ((await repos.aiUsage.countLast24h(chatId)) >= config.dailyCallCapPerChat) blockedReason = "daily_cap";
@@ -149,9 +158,10 @@ export function createAiFunPart(): PartDefinition {
 
 				const kind: AiUsageKind = isTriggered ? "trigger" : "gacha";
 				const context = await buildChatContext(repos.messages, chatId, threadId, config);
-				const summary = await getSummary(repos.settings, chatId);
+				const summary = await getSummary(repos.settings, chatId, threadId);
 
-				const action = isTriggered ? `${text} - тебе написали, ответь` : pickAction(config, context.activeParticipants).action;
+				const picked = isTriggered ? null : pickAction(config, context.activeParticipants);
+				const action = isTriggered ? `${text} - тебе написали, ответь` : picked!.action;
 				const prompt = buildSystemPrompt(config, action);
 				const userContent = buildUserContent(context, summary);
 
@@ -170,7 +180,19 @@ export function createAiFunPart(): PartDefinition {
 				}
 
 				const costUsd = estimateCostUsd(reply.promptTokens, reply.completionTokens, config.providers[config.provider]);
-				await repos.aiUsage.record({ chatId, kind, provider: config.provider, promptTokens: reply.promptTokens, completionTokens: reply.completionTokens, costUsd });
+				await repos.aiUsage.record({
+					chatId,
+					threadId,
+					kind,
+					tone: picked?.tone ?? null,
+					provider: config.provider,
+					promptText: prompt,
+					userContent,
+					replyText: reply.text,
+					promptTokens: reply.promptTokens,
+					completionTokens: reply.completionTokens,
+					costUsd,
+				});
 				logger.info("AI replied", { chatId, threadId, kind, provider: config.provider, costUsd });
 
 				return next();
