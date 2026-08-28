@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="ru">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>Реван — админка</title>
+	<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+	<div id="login-view">
+		<form id="login-form" class="login-card">
+			<h1>Реван — вход</h1>
+			<input type="text" id="login-username" placeholder="Логин" autocomplete="username" required />
+			<input type="password" id="login-password" placeholder="Пароль" autocomplete="current-password" required />
+			<button type="submit" class="primary">Войти</button>
+			<p class="error-text" id="login-error"></p>
+		</form>
+	</div>
+
+	<div id="app-view" hidden>
+		<header>
+			<h1>Реван — админка</h1>
+			<nav>
+				<button type="button" data-tab="topics" class="tab-btn active">Подчаты</button>
+				<button type="button" data-tab="ai-config" class="tab-btn">AI-конфиг</button>
+				<button type="button" data-tab="mutevote-config" class="tab-btn">Голосование</button>
+				<button type="button" data-tab="ai-stats" class="tab-btn">Статистика AI</button>
+				<button type="button" data-tab="votes" class="tab-btn">Голосования</button>
+				<button type="button" data-tab="logs" class="tab-btn">Логи</button>
+				<button type="button" data-tab="accounts" class="tab-btn">Аккаунты</button>
+			</nav>
+			<div class="spacer"></div>
+			<span class="hint" id="whoami"></span>
+			<button type="button" id="logout-btn">Выйти</button>
+		</header>
+
+		<main>
+			<section id="tab-topics" class="tab-panel active">
+				<p class="hint">Чат/тема регистрируется в этом списке автоматически, как только кто-то написал в неё — по умолчанию бот молчит. Включите тумблер, чтобы разрешить AI-шутки и/или голосование за мьют именно там ("подчаты" = форум-темы внутри супергруппы; для обычной группы без форума — единственная строка с thread_id=0).</p>
+				<table id="topics-table">
+					<thead>
+						<tr>
+							<th>Чат</th>
+							<th>chat_id</th>
+							<th>thread_id / тема</th>
+							<th>AI-шутки</th>
+							<th>Голосование</th>
+						</tr>
+					</thead>
+					<tbody></tbody>
+				</table>
+			</section>
+
+			<section id="tab-ai-config" class="tab-panel">
+				<p class="hint">Правки применяются к следующему ответу бота без передеплоя.</p>
+
+				<div class="card">
+					<h3>Провайдер и месячный бюджет</h3>
+					<p class="hint">Оба ключа (DeepSeek/OpenAI) читаются из env — переключение здесь не требует перезапуска. baseURL/модель/цена за токен — оценочные, для расчёта $ в статистике; если провайдер изменит цены, поправьте здесь.</p>
+					<div class="form-row inline">
+						<label>Активный провайдер</label>
+						<select id="ai-provider">
+							<option value="deepseek">DeepSeek</option>
+							<option value="openai">OpenAI</option>
+						</select>
+					</div>
+					<div class="form-row inline">
+						<label>Месячный $ лимит (0 = без лимита)</label>
+						<input type="number" id="ai-monthly-budget" min="0" step="0.5" />
+					</div>
+
+					<div class="form-row inline"><label>DeepSeek — модель</label><input type="text" id="p-deepseek-model" /></div>
+					<div class="form-row inline"><label>DeepSeek — baseURL</label><input type="text" id="p-deepseek-baseurl" /></div>
+					<div class="form-row inline"><label>DeepSeek — $/1M вход</label><input type="number" id="p-deepseek-in" min="0" step="0.01" /></div>
+					<div class="form-row inline"><label>DeepSeek — $/1M выход</label><input type="number" id="p-deepseek-out" min="0" step="0.01" /></div>
+
+					<div class="form-row inline"><label>OpenAI — модель</label><input type="text" id="p-openai-model" /></div>
+					<div class="form-row inline"><label>OpenAI — baseURL</label><input type="text" id="p-openai-baseurl" /></div>
+					<div class="form-row inline"><label>OpenAI — $/1M вход</label><input type="number" id="p-openai-in" min="0" step="0.01" /></div>
+					<div class="form-row inline"><label>OpenAI — $/1M выход</label><input type="number" id="p-openai-out" min="0" step="0.01" /></div>
+				</div>
+
+				<div class="card">
+					<h3>Персона и триггер</h3>
+					<div class="form-row">
+						<label>Системный промпт (используйте {action} — туда подставляется сценарий)</label>
+						<textarea id="ai-prompt"></textarea>
+					</div>
+					<div class="form-row">
+						<label>Триггер-слово (упоминание в любом сообщении вызывает ответ)</label>
+						<input type="text" id="ai-trigger" />
+					</div>
+				</div>
+
+				<div class="card">
+					<h3>Частота — держим счёт предсказуемым</h3>
+					<div class="form-row inline">
+						<label>Общий кулдаун между AI-ответами в чате, мин</label>
+						<input type="number" id="ai-cooldown" min="0" />
+					</div>
+					<div class="form-row inline">
+						<label>Дневной кап AI-вызовов на чат</label>
+						<input type="number" id="ai-daily-cap" min="1" />
+					</div>
+					<div class="form-row inline">
+						<label>max_tokens ответа-шутки</label>
+						<input type="number" id="ai-max-tokens" min="50" />
+					</div>
+					<div class="form-row inline">
+						<label>Бюджет контекста, символов</label>
+						<input type="number" id="ai-char-budget" min="100" />
+					</div>
+					<div class="form-row inline">
+						<label>Окно "активных участников", сообщений</label>
+						<input type="number" id="ai-participants-window" min="1" />
+					</div>
+				</div>
+
+				<div class="card">
+					<h3>Роллинг-саммари</h3>
+					<p class="hint">Раз в N сообщений бот дешёвым отдельным вызовом обновляет короткую сводку атмосферы чата — каждая шутка использует её вместо того, чтобы каждый раз перечитывать длинную историю.</p>
+					<div class="form-row inline">
+						<label>Обновлять каждые N сообщений</label>
+						<input type="number" id="ai-summary-every" min="5" />
+					</div>
+					<div class="form-row inline">
+						<label>Сколько сообщений брать при обновлении</label>
+						<input type="number" id="ai-summary-lookback" min="5" />
+					</div>
+					<div class="form-row inline">
+						<label>Максимум символов в саммари</label>
+						<input type="number" id="ai-summary-maxchars" min="100" />
+					</div>
+					<div class="form-row inline">
+						<label>max_tokens вызова саммари</label>
+						<input type="number" id="ai-summary-maxtokens" min="30" />
+					</div>
+				</div>
+
+				<div class="card">
+					<h3>Тон шутки — веса категорий (пассивная гача)</h3>
+					<p class="hint">Относительные веса, не обязаны суммироваться в 100 — нормализуются на лету. Targeted/sarcasm/praise подставляют случайного "активного" участника вместо {target} в сценарии.</p>
+					<div class="form-row inline"><label>general</label><input type="number" id="tone-general" min="0" /></div>
+					<div class="form-row inline"><label>targeted</label><input type="number" id="tone-targeted" min="0" /></div>
+					<div class="form-row inline"><label>sarcasm</label><input type="number" id="tone-sarcasm" min="0" /></div>
+					<div class="form-row inline"><label>praise</label><input type="number" id="tone-praise" min="0" /></div>
+
+					<div class="form-row">
+						<label>Сценарии — general (по одному на строку)</label>
+						<textarea id="actions-general"></textarea>
+					</div>
+					<div class="form-row">
+						<label>Сценарии — targeted, можно использовать {target} (по одному на строку)</label>
+						<textarea id="actions-targeted"></textarea>
+					</div>
+					<div class="form-row">
+						<label>Сценарии — sarcasm, можно использовать {target} (по одному на строку)</label>
+						<textarea id="actions-sarcasm"></textarea>
+					</div>
+					<div class="form-row">
+						<label>Сценарии — praise, можно использовать {target} (по одному на строку)</label>
+						<textarea id="actions-praise"></textarea>
+					</div>
+				</div>
+
+				<div class="card">
+					<h3>Гача — вероятность пассивного срабатывания</h3>
+					<div class="form-row inline">
+						<label>Гарантированный ответ на N-м сообщении</label>
+						<input type="number" id="ai-guaranteed" min="1" />
+					</div>
+					<div class="form-row">
+						<label>Кривая гачи (JSON: [{"upToCounter":20,"probability":0.005}, ...])</label>
+						<textarea id="ai-curve"></textarea>
+					</div>
+				</div>
+
+				<div class="card">
+					<h3>Флейвор "да"/"нет" — бесплатный, не расходует AI-бюджет</h3>
+					<div class="form-row inline">
+						<label>Шанс ответить (0..1)</label>
+						<input type="number" id="ai-yesno-prob" min="0" max="1" step="0.05" />
+					</div>
+					<div class="form-row">
+						<label>Ответы на "да" (по одному на строку)</label>
+						<textarea id="ai-yes"></textarea>
+					</div>
+					<div class="form-row">
+						<label>Ответы на "нет" (по одному на строку)</label>
+						<textarea id="ai-no"></textarea>
+					</div>
+				</div>
+
+				<button type="button" id="ai-config-save" class="primary">Сохранить</button>
+				<p class="ok-text" id="ai-config-status"></p>
+			</section>
+
+			<section id="tab-mutevote-config" class="tab-panel">
+				<p class="hint">Спецфраза, которой нужно ответить на сообщение нарушителя, чтобы открыть голосование, и его правила.</p>
+				<div class="card">
+					<div class="form-row">
+						<label>Спецфраза</label>
+						<input type="text" id="mv-phrase" />
+					</div>
+					<div class="form-row inline">
+						<label>Кворум "да"</label>
+						<input type="number" id="mv-quorum" min="1" />
+					</div>
+					<div class="form-row inline">
+						<label>Окно голосования, мин</label>
+						<input type="number" id="mv-window" min="1" />
+					</div>
+					<div class="form-row inline">
+						<label>Длительность мьюта, мин</label>
+						<input type="number" id="mv-mute" min="1" />
+					</div>
+					<button type="button" id="mv-config-save" class="primary">Сохранить</button>
+					<p class="ok-text" id="mv-config-status"></p>
+				</div>
+			</section>
+
+			<section id="tab-ai-stats" class="tab-panel">
+				<div class="card" id="ai-budget-card">
+					<h3>Бюджет</h3>
+					<p>Провайдер: <strong id="budget-provider">—</strong></p>
+					<p>Потрачено сегодня: <strong id="budget-today">—</strong></p>
+					<p>Потрачено в этом месяце: <strong id="budget-month">—</strong> из <strong id="budget-limit">—</strong></p>
+					<p id="budget-status" class="ok-text"></p>
+				</div>
+
+				<p class="hint">Агрегаты за последние 30 дней.</p>
+				<h3>По дням</h3>
+				<table id="ai-stats-daily-table">
+					<thead><tr><th>День</th><th>Звонков</th><th>Prompt tokens</th><th>Completion tokens</th><th>$</th></tr></thead>
+					<tbody></tbody>
+				</table>
+				<h3>По чатам</h3>
+				<table id="ai-stats-chats-table">
+					<thead><tr><th>chat_id</th><th>Звонков</th><th>$</th></tr></thead>
+					<tbody></tbody>
+				</table>
+			</section>
+
+			<section id="tab-votes" class="tab-panel">
+				<div class="controls">
+					<input type="text" id="votes-chat-id" placeholder="chat_id" />
+					<button type="button" id="votes-load">Показать</button>
+				</div>
+				<table id="votes-table">
+					<thead><tr><th>Начато</th><th>Тема</th><th>Цель</th><th>Инициатор</th><th>Статус</th></tr></thead>
+					<tbody></tbody>
+				</table>
+			</section>
+
+			<section id="tab-logs" class="tab-panel">
+				<div class="controls">
+					<select id="logs-part-filter">
+						<option value="">Все части</option>
+						<option value="system">system</option>
+						<option value="core">core</option>
+						<option value="ai-fun">ai-fun</option>
+						<option value="mute-vote">mute-vote</option>
+					</select>
+					<select id="logs-level-filter">
+						<option value="">Все уровни</option>
+						<option value="debug">debug</option>
+						<option value="info">info</option>
+						<option value="warn">warn</option>
+						<option value="error">error</option>
+					</select>
+					<button type="button" id="logs-refresh">Обновить</button>
+				</div>
+				<table id="logs-table">
+					<thead><tr><th>Время</th><th>Часть</th><th>Уровень</th><th>Модуль</th><th>Сообщение</th><th>Контекст</th></tr></thead>
+					<tbody></tbody>
+				</table>
+			</section>
+
+			<section id="tab-accounts" class="tab-panel">
+				<p class="hint">Суперадмин-аккаунты панели — все равноправны, полный доступ ко всем чатам.</p>
+				<form id="accounts-add-form" class="controls">
+					<input type="text" id="accounts-username" placeholder="Логин" required />
+					<input type="password" id="accounts-password" placeholder="Пароль (от 8 символов)" required />
+					<button type="submit" class="primary">Добавить</button>
+				</form>
+				<p class="error-text" id="accounts-error"></p>
+				<table id="accounts-table">
+					<thead><tr><th>Логин</th><th>Создан</th><th></th></tr></thead>
+					<tbody></tbody>
+				</table>
+			</section>
+		</main>
+	</div>
+
+	<script src="/app.js"></script>
+</body>
+</html>
