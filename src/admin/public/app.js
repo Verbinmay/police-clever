@@ -98,13 +98,50 @@ function topicRow(chat, topic, empty) {
 	tr.children[5].appendChild(toggleSwitch(topic.muteVoteEnabled, (checked) => setTopicToggle(chat.chatId, topic.threadId, { muteVoteEnabled: checked })));
 	tr.children[6].textContent = topic.summary ?? (topic.aiJokesEnabled ? "(ещё не собрана)" : "—");
 	// Гача вероятностная (см. gacha.ts) — счётчик это "гарантированно не
-	// позже чем через N", реально может сработать и раньше.
-	tr.children[7].textContent = topic.aiJokesEnabled ? `${topic.gachaCounter}/${topic.gachaGuaranteedAt} (может раньше)` : "—";
+	// позже чем через N", реально может сработать и раньше. Значение
+	// редактируемое — можно подвинуть ближе к гарантии (ответит скорее)
+	// или отодвинуть (ответит позже), не дожидаясь реальных сообщений.
+	if (topic.aiJokesEnabled) {
+		tr.children[7].appendChild(gachaCounterEditor(chat.chatId, topic.threadId, topic.gachaCounter, topic.gachaGuaranteedAt));
+	} else {
+		tr.children[7].textContent = "—";
+	}
 	// Кулдаун и дневной кап — счётчики на весь ЧАТ (не на тему, см. cooldown.ts),
 	// поэтому одинаковы во всех строках тем одного чата.
 	tr.children[8].textContent = chat.cooldownRemainingMin > 0 ? `ещё ${chat.cooldownRemainingMin} мин` : "—";
 	tr.children[9].textContent = chat.dailyCapRemainingMin > 0 ? `ещё ${chat.dailyCapRemainingMin} мин` : "—";
 	return tr;
+}
+
+function gachaCounterEditor(chatId, threadId, value, guaranteedAt) {
+	const wrap = document.createElement("span");
+	const input = document.createElement("input");
+	input.type = "number";
+	input.min = "1";
+	input.max = String(guaranteedAt);
+	input.value = value;
+	input.style.width = "60px";
+	const suffix = document.createElement("span");
+	suffix.className = "hint";
+	suffix.textContent = ` / ${guaranteedAt} (может раньше)`;
+
+	input.addEventListener("change", async () => {
+		const next = Number(input.value);
+		if (!Number.isFinite(next) || next < 1) {
+			input.value = value;
+			return;
+		}
+		try {
+			await api(`/topics/${chatId}/${threadId}/gacha-counter`, { method: "PUT", body: { value: next } });
+			value = next;
+		} catch (err) {
+			alert(`Не удалось изменить счётчик: ${err.message}`);
+			input.value = value;
+		}
+	});
+
+	wrap.append(input, suffix);
+	return wrap;
 }
 
 function toggleSwitch(checked, onChange) {
