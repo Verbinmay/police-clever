@@ -27,6 +27,23 @@ const SUMMARY_PROMPT =
 const SUMMARY_PROMPT_CUMULATIVE =
 	"Вот предыдущая сводка атмосферы чата и новые сообщения после неё. Обнови сводку: сохрани то, что всё ещё актуально, замени устаревшее свежим. Обязательно: для каждого активного участника — конкретно, о чём или над чем он шутит/докапывается, не общими словами. Если кто-то обращался к боту напрямую или реагировал на его слова — отметь это. Заметные детали (личные новости, необычные или тревожные события) передавай как есть, не сглаживай. Только сама обновлённая сводка, 2-4 предложения, без вступлений.";
 
+/**
+ * Жёсткий срез по maxChars обрывал конкретные цитаты на середине слова —
+ * особенно заметно стало после того, как промпт начал требовать конкретику
+ * (цитаты занимают больше места, чем общие фразы). Ищем границу
+ * предложения/цитаты в последних ~30% лимита; если её нет — откатываемся
+ * на жёсткий срез, чтобы не проглотить сводку целиком в поиске границы.
+ */
+function truncateAtSentence(text: string, maxChars: number): string {
+	if (text.length <= maxChars) return text;
+	const slice = text.slice(0, maxChars);
+	const boundary = Math.max(slice.lastIndexOf(". "), slice.lastIndexOf("! "), slice.lastIndexOf("? "), slice.lastIndexOf("» "), slice.lastIndexOf("»,"));
+	if (boundary > maxChars * 0.7) {
+		return slice.slice(0, boundary + 1);
+	}
+	return `${slice}…`;
+}
+
 /** Текущая сохранённая сводка темы (null, если ещё ни разу не собиралась). На (chatId, threadId), не только chatId — иначе разные темы одного чата делили бы одну сводку. */
 export async function getSummary(settings: SettingsRepository, chatId: string, threadId: string): Promise<string | null> {
 	return settings.get<string | null>(PART_ID, summaryKey(chatId, threadId), null);
@@ -90,7 +107,7 @@ export async function maybeUpdateSummary(
 			return;
 		}
 
-		const text = reply.text.length > config.summary.maxChars ? `${reply.text.slice(0, config.summary.maxChars)}…` : reply.text;
+		const text = truncateAtSentence(reply.text, config.summary.maxChars);
 		await settings.set(PART_ID, summaryKey(chatId, threadId), text);
 		logger.info("Summary refreshed", { chatId, threadId, chars: text.length });
 	} catch (err) {

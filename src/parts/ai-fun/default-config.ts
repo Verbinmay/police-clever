@@ -156,8 +156,8 @@ export const DEFAULT_AI_CONFIG: AiConfig = {
 	summary: {
 		everyNMessages: 40,
 		lookbackMessages: 40,
-		maxChars: 400,
-		maxTokens: 150,
+		maxChars: 550,
+		maxTokens: 220,
 		cumulative: false,
 	},
 	gachaCurve: [
