@@ -51,5 +51,30 @@ export function createVotesRouter(muteVotes: MuteVotesRepository, topics: Topics
 		res.json({ ok: true });
 	});
 
+	/**
+	 * Принудительно убрать запись из "актуальных" (listRelevant) без обращения
+	 * к Telegram — для зависших/некорректных строк, где реального мьюта
+	 * нет (например, цель — админ чата, Telegram отказал мьютить, а старая
+	 * версия кода всё равно писала status="muted"). В отличие от /unmute
+	 * ничего не шлёт в Telegram и работает для любого статуса.
+	 */
+	router.post("/:voteId/dismiss", async (req, res) => {
+		const { voteId } = req.params;
+		if (!voteId) {
+			res.status(400).json({ error: "voteId обязателен" });
+			return;
+		}
+
+		const vote = await muteVotes.findById(voteId);
+		if (!vote) {
+			res.status(404).json({ error: "Голосование не найдено" });
+			return;
+		}
+
+		await muteVotes.setStatus(voteId, "expired");
+		logger.info("Vote manually dismissed from admin panel", { voteId, chatId: vote.chatId, previousStatus: vote.status });
+		res.json({ ok: true });
+	});
+
 	return router;
 }

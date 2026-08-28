@@ -365,6 +365,12 @@ async function loadVotes() {
 	tbody.innerHTML = votes
 		.map((v) => {
 			const unmuteBtn = v.status === "muted" ? `<button type="button" class="danger" data-unmute="${v.id}">Снять мьют</button>` : "";
+			// "Забыть" — не ходит в Telegram, просто убирает запись из списка
+			// актуальных. Нужно для зависших/некорректных строк — например,
+			// цель оказалась админом чата, Telegram отказал мьютить, а запись
+			// всё равно осталась висеть как "muted" (в т.ч. старые записи до
+			// фикса статуса под такой случай).
+			const dismissBtn = `<button type="button" data-dismiss="${v.id}">Забыть</button>`;
 			return `<tr>
 				<td>${new Date(v.startedAt).toLocaleString("ru-RU")}</td>
 				<td>${v.chatId}</td>
@@ -373,7 +379,7 @@ async function loadVotes() {
 				<td>${v.requestedByTgId}</td>
 				<td>${v.yes} / ${v.no}</td>
 				<td>${v.status}</td>
-				<td>${unmuteBtn}</td>
+				<td>${unmuteBtn} ${dismissBtn}</td>
 			</tr>`;
 		})
 		.join("");
@@ -389,6 +395,20 @@ async function loadVotes() {
 				alert(`Не удалось снять мьют: ${err.message}`);
 				btn.disabled = false;
 				btn.textContent = "Снять мьют";
+			}
+		});
+	});
+
+	tbody.querySelectorAll("button[data-dismiss]").forEach((btn) => {
+		btn.addEventListener("click", async () => {
+			if (!confirm("Убрать эту запись из списка? Реальный мьют (если он есть) это не тронет — только запись в панели.")) return;
+			btn.disabled = true;
+			try {
+				await api(`/votes/${btn.dataset.dismiss}/dismiss`, { method: "POST" });
+				loadVotes();
+			} catch (err) {
+				alert(`Не удалось убрать запись: ${err.message}`);
+				btn.disabled = false;
 			}
 		});
 	});
