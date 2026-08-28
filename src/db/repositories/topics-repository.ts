@@ -18,7 +18,7 @@ export class TopicsRepository {
 		return this.dataSource.getRepository(TopicSchema);
 	}
 
-	/** Регистрирует тему при первом сообщении оттуда — оба тумблера по умолчанию выключены. */
+	/** Регистрирует тему при первом сообщении оттуда — все тумблеры по умолчанию выключены. */
 	async ensureRegistered(input: EnsureTopicInput): Promise<Topic> {
 		const existing = await this.repo.findOneBy({ chatId: input.chatId, threadId: input.threadId });
 		if (existing) {
@@ -35,6 +35,7 @@ export class TopicsRepository {
 				topicName: input.topicName ?? null,
 				aiJokesEnabled: false,
 				muteVoteEnabled: false,
+				yesNoEnabled: false,
 			}),
 		);
 	}
@@ -47,7 +48,7 @@ export class TopicsRepository {
 		return this.repo.find({ order: { updatedAt: "DESC" } });
 	}
 
-	async setToggles(chatId: string, threadId: string, patch: Partial<Pick<Topic, "aiJokesEnabled" | "muteVoteEnabled">>): Promise<Topic | null> {
+	async setToggles(chatId: string, threadId: string, patch: Partial<Pick<Topic, "aiJokesEnabled" | "muteVoteEnabled" | "yesNoEnabled">>): Promise<Topic | null> {
 		const existing = await this.repo.findOneBy({ chatId, threadId });
 		if (!existing) return null;
 		Object.assign(existing, patch);

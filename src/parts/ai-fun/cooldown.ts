@@ -2,23 +2,23 @@ import type { SettingsRepository } from "../../db/repositories/settings-reposito
 
 const PART_ID = "ai";
 
-function cooldownKey(chatId: string): string {
-	return `cooldown:${chatId}`;
+function cooldownKey(chatId: string, kind: string): string {
+	return `cooldown:${kind}:${chatId}`;
 }
 
 /**
- * Общий кулдаун между ЛЮБЫМИ AI-ответами в чате (триггер-слово или гача) —
- * персистентный (переживает рестарт процесса, в отличие от старого
- * in-memory лимита, который был только у триггер-слова и не покрывал
- * гачу вовсе). Прямая защита от того, что активный чат просто из-за
- * объёма сообщений накручивает AI-вызовы чаще, чем хочется платить.
+ * Персистентный (переживает рестарт процесса) кулдаун на чат, по видам:
+ * "reply" — общий между ЛЮБЫМИ AI-ответами (триггер-слово или гача);
+ * "sticker" — отдельный, короткий, на стикер-заглушку (см. stickers.ts),
+ * чтобы спам триггер-словом не превращался в спам стикерами вместо
+ * AI-вызовов, когда основной лимит уже исчерпан.
  */
-export async function isOnCooldown(settings: SettingsRepository, chatId: string, cooldownMinutes: number): Promise<boolean> {
-	const last = await settings.get<number>(PART_ID, cooldownKey(chatId), 0);
+export async function isOnCooldown(settings: SettingsRepository, chatId: string, cooldownMinutes: number, kind: "reply" | "sticker" = "reply"): Promise<boolean> {
+	const last = await settings.get<number>(PART_ID, cooldownKey(chatId, kind), 0);
 	const diffMinutes = (Date.now() - last) / 1000 / 60;
 	return diffMinutes < cooldownMinutes;
 }
 
-export async function markCooldown(settings: SettingsRepository, chatId: string): Promise<void> {
-	await settings.set(PART_ID, cooldownKey(chatId), Date.now());
+export async function markCooldown(settings: SettingsRepository, chatId: string, kind: "reply" | "sticker" = "reply"): Promise<void> {
+	await settings.set(PART_ID, cooldownKey(chatId, kind), Date.now());
 }
