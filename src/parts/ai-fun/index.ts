@@ -84,7 +84,7 @@ export function createAiFunPart(): PartDefinition {
 					logger.error(`Провайдер "${provider}" выбран активным, но ${apiKeyEnvVar(provider)} не задан в env`, { provider });
 					return null;
 				}
-				return createAiClient(config.providers[provider], apiKey);
+				return createAiClient(config.providers[provider], apiKey, provider);
 			}
 
 			async function sendFallbackSticker(ctx: BotContext, settings: SettingsRepository, config: AiConfig, chatId: string, threadId: string) {
