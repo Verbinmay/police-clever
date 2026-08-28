@@ -1,28 +1,36 @@
-version: '3.8'
-
+# Локальная разработка: бот + собственный Postgres. Для прода — свой
+# docker-compose.prod.yml (см. README про деплой на общий VPS-стек, по
+# образцу bots-platform, либо этот же compose с внешним доступом).
 services:
   postgres:
-    image: postgres:latest
-    container_name: ${POLICE_DB_NAME}
-    env_file:
-      - .env
+    image: postgres:16-alpine
+    container_name: police-clever-db
     environment:
-      POSTGRES_DB: ${POLICE_DB_NAME}
-      POSTGRES_USER: ${POLICE_DB_USER}
-      POSTGRES_PASSWORD: ${POLICE_DB_PASSWORD}
+      POSTGRES_DB: police
+      POSTGRES_USER: police
+      POSTGRES_PASSWORD: police
     volumes:
-      - ./postgres_data:/var/lib/postgresql/data
+      - police_postgres_data:/var/lib/postgresql/data
     ports:
-      - '${POLICE_DB_PORT}:5432'
-    networks:
-      - police_network
+      - "5433:5432"
     healthcheck:
-      test:
-        ['CMD-SHELL', 'pg_isready -U ${POLICE_DB_USER} -d ${POLICE_DB_NAME}']
+      test: ["CMD-SHELL", "pg_isready -U police -d police"]
       interval: 5s
       timeout: 5s
       retries: 5
 
-networks:
-  police_network:
-    driver: bridge
+  bot:
+    build: .
+    container_name: police-clever-bot
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://police:police@postgres:5432/police
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+
+volumes:
+  police_postgres_data:
