@@ -63,7 +63,7 @@ async function loadTopics() {
 	tbody.innerHTML = "";
 	for (const chat of chats) {
 		if (chat.topics.length === 0) {
-			tbody.appendChild(topicRow(chat, { threadId: "0", topicName: null, aiJokesEnabled: false, muteVoteEnabled: false }, true));
+			tbody.appendChild(topicRow(chat, { threadId: "0", topicName: null, aiJokesEnabled: false, muteVoteEnabled: false, yesNoEnabled: false }, true));
 			continue;
 		}
 		for (const topic of chat.topics) {
@@ -81,13 +81,15 @@ function topicRow(chat, topic, empty) {
 		<td>${label}</td>
 		<td></td>
 		<td></td>
+		<td></td>
 	`;
 	if (empty) {
 		tr.querySelector("td:nth-child(4)").innerHTML = '<span class="hint">ещё нет сообщений</span>';
 		return tr;
 	}
 	tr.children[3].appendChild(toggleSwitch(topic.aiJokesEnabled, (checked) => setTopicToggle(chat.chatId, topic.threadId, { aiJokesEnabled: checked })));
-	tr.children[4].appendChild(toggleSwitch(topic.muteVoteEnabled, (checked) => setTopicToggle(chat.chatId, topic.threadId, { muteVoteEnabled: checked })));
+	tr.children[4].appendChild(toggleSwitch(topic.yesNoEnabled, (checked) => setTopicToggle(chat.chatId, topic.threadId, { yesNoEnabled: checked })));
+	tr.children[5].appendChild(toggleSwitch(topic.muteVoteEnabled, (checked) => setTopicToggle(chat.chatId, topic.threadId, { muteVoteEnabled: checked })));
 	return tr;
 }
 
@@ -128,13 +130,16 @@ async function loadAiConfig() {
 	el("p-openai-out").value = config.providers.openai.outputPricePerMTok;
 
 	el("ai-prompt").value = config.promptTemplate;
-	el("ai-trigger").value = config.triggerWord;
+	el("ai-trigger").value = config.triggerWords.join("\n");
 
 	el("ai-cooldown").value = config.cooldownMinutes;
 	el("ai-daily-cap").value = config.dailyCallCapPerChat;
 	el("ai-max-tokens").value = config.maxTokens;
 	el("ai-char-budget").value = config.contextCharBudget;
 	el("ai-participants-window").value = config.activeParticipantsLookback;
+
+	el("ai-sticker-pack").value = config.stickerPackShortName;
+	el("ai-sticker-cooldown").value = config.stickerCooldownMinutes;
 
 	el("ai-summary-every").value = config.summary.everyNMessages;
 	el("ai-summary-lookback").value = config.summary.lookbackMessages;
@@ -185,12 +190,14 @@ el("ai-config-save").addEventListener("click", async () => {
 				},
 
 				promptTemplate: el("ai-prompt").value,
-				triggerWord: el("ai-trigger").value,
+				triggerWords: linesOf("ai-trigger"),
 
 				cooldownMinutes: Number(el("ai-cooldown").value),
 				dailyCallCapPerChat: Number(el("ai-daily-cap").value),
 				maxTokens: Number(el("ai-max-tokens").value),
 				contextCharBudget: Number(el("ai-char-budget").value),
+				stickerPackShortName: el("ai-sticker-pack").value.trim(),
+				stickerCooldownMinutes: Number(el("ai-sticker-cooldown").value),
 				activeParticipantsLookback: Number(el("ai-participants-window").value),
 
 				summary: {

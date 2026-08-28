@@ -3,6 +3,7 @@ import type { BotContext } from "../../bot-context.ts";
 import type { PartDefinition, PartSetupContext } from "../../bot-part.ts";
 import { config as appConfig } from "../../config.ts";
 import type { AiUsageKind } from "../../db/entities/AiUsage.ts";
+import type { SettingsRepository } from "../../db/repositories/settings-repository.ts";
 import { cropTextForMessage } from "../../shared/crop-text-for-message.ts";
 import { getThreadId, isGroupChat } from "../../shared/telegram.ts";
 import { type AiClient, createAiClient } from "./ai-client.ts";
@@ -13,6 +14,7 @@ import { buildChatContext, buildSystemPrompt, buildUserContent } from "./dialog.
 import type { AiConfig } from "./default-config.ts";
 import { apiKeyEnvVar, type ProviderId } from "./providers.ts";
 import { rollGacha } from "./gacha.ts";
+import { getRandomStickerFileId } from "./stickers.ts";
 import { getSummary, maybeUpdateSummary } from "./summary.ts";
 import { pickAction } from "./tone.ts";
 
@@ -31,21 +33,28 @@ const API_KEYS: Record<ProviderId, string> = {
 };
 
 /**
- * AI-шутки: бот следит за разговором и иногда встревает — по имени
- * (триггер-слово, безусловно) или сам (пассивная "гача"), с одним из
- * четырёх настроений (general/targeted/sarcasm/praise, см. tone.ts) —
- * плюс лёгкий бесплатный флейвор на "да"/"нет" (не расходует AI-бюджет).
+ * AI-шутки: бот следит за разговором и иногда встревает — по имени (любое
+ * из нескольких триггер-слов, безусловно) или сам (пассивная "гача"), с
+ * одним из четырёх настроений (general/targeted/sarcasm/praise, см.
+ * tone.ts) — плюс лёгкий бесплатный флейвор на "да"/"нет" (свой тумблер,
+ * не расходует AI-бюджет, работает независимо от AI-шуток).
  *
  * Стоимость развязана с активностью чата и ограничена сразу с четырёх
- * сторон:
+ * сторон — и это касается ОБОИХ путей одинаково (позвали по имени или
+ * сработала гача), кто угодно не может "разорить" владельца, просто зовя
+ * бота по имени чаще:
  *  1. Контекст — бюджет по символам + роллинг-саммари (dialog.ts,
  *     summary.ts), а не "последние N сообщений".
  *  2. Персистентный общий кулдаун между ЛЮБЫМИ AI-ответами в чате
- *     (cooldown.ts) — не только у триггер-слова, как было раньше.
+ *     (cooldown.ts).
  *  3. Дневной кап вызовов НА ЧАТ (AiConfig.dailyCallCapPerChat).
  *  4. Глобальный месячный $ потолок НА ВЕСЬ БОТ (AiConfig.monthlyBudgetUsd,
- *     см. budget.ts) — считается по фактическим ценам провайдера на
- *     момент каждого вызова (AiUsage.costUsd), самая прямая страховка.
+ *     см. budget.ts).
+ *
+ * Когда лимит исчерпан, но позвали ПО ИМЕНИ (не гачей) — вместо тишины
+ * отправляется случайный стикер из заранее заданного стикерпака
+ * (stickers.ts) со своим отдельным коротким кулдауном, чтобы спам
+ * триггер-словом не превращался в спам стикерами.
  *
  * Провайдер (DeepSeek/OpenAI) переключается в панели без передеплоя —
  * оба клиента собираются один раз при старте (если ключ задан в env), а
@@ -70,6 +79,18 @@ export function createAiFunPart(): PartDefinition {
 				return createAiClient(config.providers[provider], apiKey);
 			}
 
+			async function sendFallbackSticker(ctx: BotContext, settings: SettingsRepository, config: AiConfig, chatId: string, threadId: string) {
+				if (!config.stickerPackShortName) return;
+				if (await isOnCooldown(settings, chatId, config.stickerCooldownMinutes, "sticker")) return;
+
+				const fileId = await getRandomStickerFileId(ctx.telegram, config.stickerPackShortName, logger);
+				if (!fileId) return;
+
+				await ctx.replyWithSticker(fileId, { message_thread_id: toThreadIdParam(threadId) }).catch(() => {});
+				await markCooldown(settings, chatId, "sticker");
+				logger.info("Sent fallback sticker (AI limit reached)", { chatId, threadId });
+			}
+
 			composer.on("text", async (ctx, next) => {
 				const chat = ctx.chat;
 				if (!isGroupChat(chat)) return next();
@@ -77,10 +98,26 @@ export function createAiFunPart(): PartDefinition {
 				const chatId = String(chat.id);
 				const threadId = getThreadId(ctx);
 				const topic = await repos.topics.get(chatId, threadId);
-				if (!topic?.aiJokesEnabled) return next();
+				if (!topic) return next();
 
 				const text = ctx.message.text;
 				const config = await loadAiConfig(repos.settings);
+
+				// Бесплатный флейвор — свой тумблер, независимый от AI-шуток, не
+				// расходует AI-бюджет и не участвует в кулдауне.
+				if (topic.yesNoEnabled) {
+					const normalized = text.trim().toLowerCase();
+					if (normalized === "да" || normalized === "нет") {
+						if (Math.random() < config.yesNoReplyProbability) {
+							const answer = normalized === "да" ? pickRandom(config.yesAnswers) : pickRandom(config.noAnswers);
+							await ctx.reply(answer, { message_thread_id: toThreadIdParam(threadId) }).catch(() => {});
+						}
+						return next();
+					}
+				}
+
+				if (!topic.aiJokesEnabled) return next();
+
 				const aiClient = getClient(config, config.provider);
 
 				// Обслуживание саммари не зависит от того, сработает ли шутка на
@@ -90,32 +127,23 @@ export function createAiFunPart(): PartDefinition {
 					await maybeUpdateSummary(aiClient, repos.messages, repos.settings, chatId, threadId, config, logger);
 				}
 
-				// Бесплатный флейвор — не расходует AI-бюджет и не участвует в кулдауне.
-				const normalized = text.trim().toLowerCase();
-				if (normalized === "да" || normalized === "нет") {
-					if (Math.random() < config.yesNoReplyProbability) {
-						const answer = normalized === "да" ? pickRandom(config.yesAnswers) : pickRandom(config.noAnswers);
-						await ctx.reply(answer, { message_thread_id: toThreadIdParam(threadId) }).catch(() => {});
-					}
-					return next();
-				}
-
-				const isTriggered = Boolean(config.triggerWord) && text.includes(config.triggerWord);
+				const isTriggered = config.triggerWords.some((word) => word && text.includes(word));
 				const wantsGacha = !isTriggered && (await rollGacha(repos.settings, chatId, config));
 				if (!isTriggered && !wantsGacha) return next();
 
 				if (!aiClient) return next(); // провайдер выбран, но ключ не настроен — уже залогировано выше
 
-				if (await isOnCooldown(repos.settings, chatId, config.cooldownMinutes)) {
-					logger.debug("AI reply skipped: cooldown", { chatId, threadId });
-					return next();
-				}
-				if ((await repos.aiUsage.countLast24h(chatId)) >= config.dailyCallCapPerChat) {
-					logger.warn("AI reply skipped: daily cap reached", { chatId, cap: config.dailyCallCapPerChat });
-					return next();
-				}
-				if (await isOverMonthlyBudget(repos.aiUsage, config.monthlyBudgetUsd)) {
-					logger.warn("AI reply skipped: monthly budget reached", { chatId, monthlyBudgetUsd: config.monthlyBudgetUsd });
+				let blockedReason: "cooldown" | "daily_cap" | "monthly_budget" | null = null;
+				if (await isOnCooldown(repos.settings, chatId, config.cooldownMinutes)) blockedReason = "cooldown";
+				else if ((await repos.aiUsage.countLast24h(chatId)) >= config.dailyCallCapPerChat) blockedReason = "daily_cap";
+				else if (await isOverMonthlyBudget(repos.aiUsage, config.monthlyBudgetUsd)) blockedReason = "monthly_budget";
+
+				if (blockedReason) {
+					logger.debug("AI reply skipped", { chatId, threadId, reason: blockedReason });
+					// Гачу лимит просто гасит молча — её никто явно не просил. А вот
+					// если позвали по имени и уткнулись в лимит, отвечаем хотя бы
+					// стикером, чтобы не выглядело так, будто бот не услышал.
+					if (isTriggered) await sendFallbackSticker(ctx, repos.settings, config, chatId, threadId);
 					return next();
 				}
 

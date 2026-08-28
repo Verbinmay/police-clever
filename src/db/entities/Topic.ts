@@ -4,11 +4,13 @@ import { EntitySchema } from "typeorm";
  * Тема (форум-топик) внутри супергруппы, либо сам чат целиком, если он не
  * форум (тогда threadId="0" — единственная "тема" чата). Порт идеи
  * `TopicAssignment` из bots-platform, но без эксклюзивного роутинга "тема
- * → одна часть": здесь два независимых тумблера, обе части могут быть
- * активны одновременно в одной теме.
+ * → одна часть": здесь независимые тумблеры, части могут быть активны
+ * одновременно в одной теме. `yesNoEnabled` — отдельно от `aiJokesEnabled`,
+ * т.к. флейвор на "да"/"нет" не расходует AI-бюджет и не нуждается в
+ * контексте — кто-то может хотеть только его, без настоящих AI-шуток.
  *
  * Регистрируется пассивно на первое сообщение из ещё не виденной темы
- * (см. src/parts/core/register.ts). По умолчанию оба тумблера выключены —
+ * (см. src/parts/core/index.ts). По умолчанию все тумблеры выключены —
  * бот в новой теме молчит, пока superadmin не включит её в панели ("подчаты
  * добавляются через админку").
  */
@@ -18,6 +20,7 @@ export interface Topic {
 	topicName: string | null;
 	aiJokesEnabled: boolean;
 	muteVoteEnabled: boolean;
+	yesNoEnabled: boolean;
 	updatedAt: Date;
 }
 
@@ -30,6 +33,7 @@ export const TopicSchema = new EntitySchema<Topic>({
 		topicName: { type: "text", nullable: true, name: "topic_name" },
 		aiJokesEnabled: { type: "boolean", default: false, name: "ai_jokes_enabled" },
 		muteVoteEnabled: { type: "boolean", default: false, name: "mute_vote_enabled" },
+		yesNoEnabled: { type: "boolean", default: false, name: "yes_no_enabled" },
 		updatedAt: { type: "timestamptz", name: "updated_at", updateDate: true },
 	},
 });
