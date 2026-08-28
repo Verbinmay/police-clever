@@ -13,7 +13,7 @@ export function createVotesRouter(muteVotes: MuteVotesRepository, topics: Topics
 		const limit = req.query.limit ? Number(req.query.limit) : 50;
 		const chatId = typeof req.query.chatId === "string" ? req.query.chatId : undefined;
 
-		const votes = await muteVotes.listRecent(limit, chatId);
+		const votes = await muteVotes.listRelevant(limit, chatId);
 		const withDetails = await Promise.all(
 			votes.map(async (vote) => {
 				const [{ yes, no }, topic] = await Promise.all([muteVotes.countBallots(vote.id), topics.get(vote.chatId, vote.threadId)]);

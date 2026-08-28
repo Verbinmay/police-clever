@@ -1,4 +1,4 @@
-import type { DataSource } from "typeorm";
+import { Brackets, type DataSource } from "typeorm";
 import { type BallotChoice, MuteVoteBallotSchema } from "../entities/MuteVoteBallot.ts";
 import { type MuteVote, type MuteVoteStatus, MuteVoteSchema } from "../entities/MuteVote.ts";
 
@@ -57,6 +57,11 @@ export class MuteVotesRepository {
 		await this.votes.update({ id }, { status });
 	}
 
+	/** Успешный мьют по итогам голосования — статус + до какого момента он действует (см. MuteVote.mutedUntil). */
+	async markMuted(id: string, mutedUntil: Date): Promise<void> {
+		await this.votes.update({ id }, { status: "muted", mutedUntil });
+	}
+
 	async setMessageId(id: string, messageId: number): Promise<void> {
 		await this.votes.update({ id }, { messageId });
 	}
@@ -68,5 +73,29 @@ export class MuteVotesRepository {
 	/** История голосований для панели — свежие сначала, опционально по чату (без chatId — по всем сразу). */
 	async listRecent(limit = 50, chatId?: string): Promise<MuteVote[]> {
 		return this.votes.find({ where: chatId ? { chatId } : {}, order: { startedAt: "DESC" }, take: limit });
+	}
+
+	/**
+	 * То же самое, но только то, что сейчас реально актуально: голосование
+	 * ещё идёт, либо мьют по нему всё ещё действует. Голосования без
+	 * кворума (expired), снятые вручную (unmuted) и с истёкшим по времени
+	 * мьютом из списка пропадают — это не полный архивный лог, а "что
+	 * сейчас может требовать внимания" (в частности — кого можно снять с
+	 * мьюта кнопкой в панели). mutedUntil=null (старые записи до этого
+	 * поля) считаем ещё актуальными — лучше показать лишнее, чем спрятать
+	 * реально активный мьют.
+	 */
+	async listRelevant(limit = 50, chatId?: string): Promise<MuteVote[]> {
+		const qb = this.votes
+			.createQueryBuilder("v")
+			.where(
+				new Brackets((sub) => {
+					sub.where("v.status = :open", { open: "open" }).orWhere("v.status = :muted AND (v.mutedUntil IS NULL OR v.mutedUntil > :now)", { muted: "muted", now: new Date() });
+				}),
+			)
+			.orderBy("v.startedAt", "DESC")
+			.take(limit);
+		if (chatId) qb.andWhere("v.chatId = :chatId", { chatId });
+		return qb.getMany();
 	}
 }

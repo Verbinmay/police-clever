@@ -25,3 +25,10 @@ export async function isOnCooldown(settings: SettingsRepository, chatId: string,
 export async function markCooldown(settings: SettingsRepository, chatId: string, kind: "reply" | "sticker" = "reply"): Promise<void> {
 	await settings.set(PART_ID, cooldownKey(chatId, kind), Date.now());
 }
+
+/** Сколько минут осталось до конца кулдауна (0 — кулдауна сейчас нет) — для счётчика "блок на AI-ответы" в панели. */
+export async function cooldownRemainingMinutes(settings: SettingsRepository, chatId: string, cooldownMinutes: number, kind: "reply" | "sticker" = "reply"): Promise<number> {
+	const last = await settings.get<number>(PART_ID, cooldownKey(chatId, kind), 0);
+	const remainingMs = cooldownMinutes * 60_000 - (Date.now() - last);
+	return remainingMs > 0 ? Math.ceil(remainingMs / 60_000) : 0;
+}

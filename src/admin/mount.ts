@@ -53,7 +53,7 @@ export async function mountAdmin(app: Express, repos: Repositories, logger: Logg
 	app.use(csrfOriginCheck);
 	app.use("/api/auth", createAuthRouter(repos.adminAccounts));
 
-	app.use("/api/topics", requireSession, createTopicsRouter(repos.chats, repos.topics, repos.settings));
+	app.use("/api/topics", requireSession, createTopicsRouter(repos.chats, repos.topics, repos.settings, repos.aiUsage));
 	app.use("/api/ai-config", requireSession, createAiConfigRouter(repos.settings));
 	app.use("/api/ai-replies", requireSession, createAiRepliesRouter(repos.aiUsage));
 	app.use("/api/mutevote-config", requireSession, createMuteVoteConfigRouter(repos.settings));

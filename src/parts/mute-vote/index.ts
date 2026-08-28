@@ -41,7 +41,12 @@ export function createMuteVotePart(): PartDefinition {
 
 				if (yes >= config.quorum && yes > no) {
 					const muted = await muteUser(telegram, vote.chatId, vote.targetTgId, config.muteMinutes, logger);
-					await repos.muteVotes.setStatus(voteId, "muted");
+					if (muted) {
+						await repos.muteVotes.markMuted(voteId, new Date(Date.now() + config.muteMinutes * 60 * 1000));
+					} else {
+						// restrictChatMember отказал (например, цель — админ чата) — мьюта по факту нет, в панели это не должно висеть как "активный мьют".
+						await repos.muteVotes.setStatus(voteId, "expired");
+					}
 					await telegram
 						.editMessageText(
 							vote.chatId,

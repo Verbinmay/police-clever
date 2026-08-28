@@ -1,7 +1,10 @@
 import { Router } from "express";
+import type { AiUsageRepository } from "../../db/repositories/ai-usage-repository.ts";
 import type { ChatsRepository } from "../../db/repositories/chats-repository.ts";
 import type { SettingsRepository } from "../../db/repositories/settings-repository.ts";
 import type { TopicsRepository } from "../../db/repositories/topics-repository.ts";
+import { loadAiConfig } from "../../parts/ai-fun/config.ts";
+import { cooldownRemainingMinutes } from "../../parts/ai-fun/cooldown.ts";
 import { getSummary } from "../../parts/ai-fun/summary.ts";
 
 /**
@@ -10,11 +13,11 @@ import { getSummary } from "../../parts/ai-fun/summary.ts";
  * "разрешения через админку": пока тумблер выключен, бот в этой теме
  * молчит целиком.
  */
-export function createTopicsRouter(chats: ChatsRepository, topics: TopicsRepository, settings: SettingsRepository): Router {
+export function createTopicsRouter(chats: ChatsRepository, topics: TopicsRepository, settings: SettingsRepository, aiUsage: AiUsageRepository): Router {
 	const router = Router();
 
 	router.get("/", async (_req, res) => {
-		const [allChats, allTopics] = await Promise.all([chats.listAll(), topics.listAll()]);
+		const [allChats, allTopics, aiConfig] = await Promise.all([chats.listAll(), topics.listAll(), loadAiConfig(settings)]);
 
 		// Сводка — только для тем с включёнными AI-шутками, остальным она всё равно не собирается.
 		const summaries = await Promise.all(
@@ -29,8 +32,28 @@ export function createTopicsRouter(chats: ChatsRepository, topics: TopicsReposit
 			topicsByChat.set(topic.chatId, list);
 		}
 
+		// Кулдаун и дневной кап — оба на весь чат (не на тему, см. cooldown.ts),
+		// поэтому считаются один раз на чат, а не на каждую тему отдельно.
+		const chatsWithCounters = await Promise.all(
+			allChats.map(async (chat) => {
+				const cooldownRemainingMin = await cooldownRemainingMinutes(settings, chat.chatId, aiConfig.cooldownMinutes);
+
+				let dailyCapRemainingMin = 0;
+				const callsLast24h = await aiUsage.countLast24h(chat.chatId);
+				if (callsLast24h >= aiConfig.dailyCallCapPerChat) {
+					const oldest = await aiUsage.oldestCallInLast24h(chat.chatId);
+					if (oldest) {
+						const freesAt = oldest.getTime() + 24 * 60 * 60 * 1000;
+						dailyCapRemainingMin = Math.max(0, Math.ceil((freesAt - Date.now()) / 60_000));
+					}
+				}
+
+				return { ...chat, cooldownRemainingMin, dailyCapRemainingMin };
+			}),
+		);
+
 		res.json(
-			allChats.map((chat) => ({
+			chatsWithCounters.map((chat) => ({
 				...chat,
 				topics: (topicsByChat.get(chat.chatId) ?? []).map((t) => ({ ...t, summary: summaryByKey.get(`${t.chatId}:${t.threadId}`) ?? null })),
 			})),
