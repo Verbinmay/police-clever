@@ -14,6 +14,12 @@ import { displayName, getThreadId, getTopicName, isGroupChat } from "../../share
  *  2. Обновляет BotUser (кто бота видел — для панели).
  *  3. Логирует текст в Message, но только если у темы включён хотя бы
  *     один из тумблеров — иначе выключенная тема не копит вообще ничего.
+ *
+ * Плюс одна-единственная команда `/th <имя>` — Telegram присылает имя
+ * форум-темы боту только служебным сообщением при её создании или
+ * переименовании; для тем старше бота имя неоткуда взять без ручного
+ * ввода. `/th <имя>`, написанная прямо в теме, регистрирует её (если ещё
+ * не была видна) и/или переименовывает — без похода в панель.
  */
 export function createCorePart(): PartDefinition {
 	return {
@@ -44,6 +50,35 @@ export function createCorePart(): PartDefinition {
 				}
 
 				return next();
+			});
+
+			composer.command("th", async (ctx) => {
+				const chat = ctx.chat;
+				if (!isGroupChat(chat)) return;
+
+				const chatId = String(chat.id);
+				const threadId = getThreadId(ctx);
+				const reply = (text: string) => ctx.reply(text, { message_thread_id: threadId === "0" ? undefined : Number(threadId) }).catch(() => {});
+
+				if (threadId === "0") {
+					await reply("/th работает только внутри форум-темы (подчата), не в общем чате.");
+					return;
+				}
+
+				const name = ctx.payload.trim();
+				if (!name) {
+					await reply("Укажите название: /th Games");
+					return;
+				}
+
+				const result = await repos.topics.setName(chatId, threadId, name);
+				if (!result) {
+					await reply("Не нашёл эту тему — напишите сюда что-нибудь ещё и повторите.");
+					return;
+				}
+
+				await reply(result.wasUnset ? `Тема зарегистрирована как "${name}".` : `Тема переименована в "${name}".`);
+				logger.info("Topic named via /th", { chatId, threadId, name, wasUnset: result.wasUnset });
 			});
 
 			logger.info("core part ready");
