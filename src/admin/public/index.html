@@ -25,6 +25,7 @@
 				<button type="button" data-tab="ai-config" class="tab-btn">AI-конфиг</button>
 				<button type="button" data-tab="mutevote-config" class="tab-btn">Голосование</button>
 				<button type="button" data-tab="ai-stats" class="tab-btn">Статистика AI</button>
+				<button type="button" data-tab="ai-replies" class="tab-btn">Ответы AI</button>
 				<button type="button" data-tab="votes" class="tab-btn">Голосования</button>
 				<button type="button" data-tab="logs" class="tab-btn">Логи</button>
 				<button type="button" data-tab="accounts" class="tab-btn">Аккаунты</button>
@@ -46,6 +47,7 @@
 							<th>AI-шутки</th>
 							<th>Да/Нет</th>
 							<th>Голосование</th>
+							<th>Сводка (авто)</th>
 						</tr>
 					</thead>
 					<tbody></tbody>
@@ -255,13 +257,26 @@
 				</table>
 			</section>
 
-			<section id="tab-votes" class="tab-panel">
+			<section id="tab-ai-replies" class="tab-panel">
+				<p class="hint">Промпт (что реально ушло модели) и контекст сворачиваются — кликните строку, чтобы развернуть. Последние 50 ответов по всем чатам, фильтр по chat_id опционален.</p>
 				<div class="controls">
-					<input type="text" id="votes-chat-id" placeholder="chat_id" />
+					<input type="text" id="ai-replies-chat-id" placeholder="chat_id (пусто = все)" />
+					<button type="button" id="ai-replies-load">Показать</button>
+				</div>
+				<table id="ai-replies-table">
+					<thead><tr><th>Время</th><th>Чат</th><th>Тема</th><th>Тип</th><th>Тон</th><th>Ответ</th><th>$</th></tr></thead>
+					<tbody></tbody>
+				</table>
+			</section>
+
+			<section id="tab-votes" class="tab-panel">
+				<p class="hint">История голосований за мьют по всем чатам, свежие сначала. У успешных ("muted") доступна кнопка снять мьют вручную.</p>
+				<div class="controls">
+					<input type="text" id="votes-chat-id" placeholder="chat_id (пусто = все)" />
 					<button type="button" id="votes-load">Показать</button>
 				</div>
 				<table id="votes-table">
-					<thead><tr><th>Начато</th><th>Тема</th><th>Цель</th><th>Инициатор</th><th>Статус</th></tr></thead>
+					<thead><tr><th>Начато</th><th>Чат</th><th>Тема</th><th>Цель</th><th>Инициатор</th><th>Да/Нет</th><th>Статус</th><th></th></tr></thead>
 					<tbody></tbody>
 				</table>
 			</section>

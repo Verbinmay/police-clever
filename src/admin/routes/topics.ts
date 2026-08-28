@@ -1,6 +1,8 @@
 import { Router } from "express";
 import type { ChatsRepository } from "../../db/repositories/chats-repository.ts";
+import type { SettingsRepository } from "../../db/repositories/settings-repository.ts";
 import type { TopicsRepository } from "../../db/repositories/topics-repository.ts";
+import { getSummary } from "../../parts/ai-fun/summary.ts";
 
 /**
  * "Подчаты" — чаты и темы внутри них (форум-топики), пассивно
@@ -8,11 +10,18 @@ import type { TopicsRepository } from "../../db/repositories/topics-repository.t
  * "разрешения через админку": пока тумблер выключен, бот в этой теме
  * молчит целиком.
  */
-export function createTopicsRouter(chats: ChatsRepository, topics: TopicsRepository): Router {
+export function createTopicsRouter(chats: ChatsRepository, topics: TopicsRepository, settings: SettingsRepository): Router {
 	const router = Router();
 
 	router.get("/", async (_req, res) => {
 		const [allChats, allTopics] = await Promise.all([chats.listAll(), topics.listAll()]);
+
+		// Сводка — только для тем с включёнными AI-шутками, остальным она всё равно не собирается.
+		const summaries = await Promise.all(
+			allTopics.filter((t) => t.aiJokesEnabled).map(async (t) => [`${t.chatId}:${t.threadId}`, await getSummary(settings, t.chatId, t.threadId)] as const),
+		);
+		const summaryByKey = new Map(summaries);
+
 		const topicsByChat = new Map<string, typeof allTopics>();
 		for (const topic of allTopics) {
 			const list = topicsByChat.get(topic.chatId) ?? [];
@@ -23,7 +32,7 @@ export function createTopicsRouter(chats: ChatsRepository, topics: TopicsReposit
 		res.json(
 			allChats.map((chat) => ({
 				...chat,
-				topics: topicsByChat.get(chat.chatId) ?? [],
+				topics: (topicsByChat.get(chat.chatId) ?? []).map((t) => ({ ...t, summary: summaryByKey.get(`${t.chatId}:${t.threadId}`) ?? null })),
 			})),
 		);
 	});

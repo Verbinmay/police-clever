@@ -64,4 +64,9 @@ export class MuteVotesRepository {
 	async listByChat(chatId: string, limit = 100): Promise<MuteVote[]> {
 		return this.votes.find({ where: { chatId }, order: { startedAt: "DESC" }, take: limit });
 	}
+
+	/** История голосований для панели — свежие сначала, опционально по чату (без chatId — по всем сразу). */
+	async listRecent(limit = 50, chatId?: string): Promise<MuteVote[]> {
+		return this.votes.find({ where: chatId ? { chatId } : {}, order: { startedAt: "DESC" }, take: limit });
+	}
 }

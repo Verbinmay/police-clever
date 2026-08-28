@@ -77,6 +77,9 @@ table {
 th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
 td.wrap { white-space: normal; }
 tr:last-child td { border-bottom: none; }
+
+.expandable-row { cursor: pointer; }
+.expandable-row:hover td { background: color-mix(in srgb, var(--accent) 8%, transparent); }
 th { color: var(--muted); font-weight: 600; }
 
 .switch { position: relative; display: inline-block; width: 36px; height: 20px; cursor: pointer; }

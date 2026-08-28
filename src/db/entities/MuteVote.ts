@@ -1,6 +1,6 @@
 import { EntitySchema } from "typeorm";
 
-export type MuteVoteStatus = "open" | "muted" | "expired";
+export type MuteVoteStatus = "open" | "muted" | "expired" | "unmuted";
 
 /**
  * Голосование за мьют — заводится реплаем спецфразой на сообщение

@@ -51,6 +51,8 @@ function loadTab(tab) {
 	if (tab === "ai-config") return loadAiConfig();
 	if (tab === "mutevote-config") return loadMuteVoteConfig();
 	if (tab === "ai-stats") return loadAiStats();
+	if (tab === "ai-replies") return loadAiReplies();
+	if (tab === "votes") return loadVotes();
 	if (tab === "logs") return loadLogs();
 	if (tab === "accounts") return loadAccounts();
 }
@@ -63,7 +65,7 @@ async function loadTopics() {
 	tbody.innerHTML = "";
 	for (const chat of chats) {
 		if (chat.topics.length === 0) {
-			tbody.appendChild(topicRow(chat, { threadId: "0", topicName: null, aiJokesEnabled: false, muteVoteEnabled: false, yesNoEnabled: false }, true));
+			tbody.appendChild(topicRow(chat, { threadId: "0", topicName: null, aiJokesEnabled: false, muteVoteEnabled: false, yesNoEnabled: false, summary: null }, true));
 			continue;
 		}
 		for (const topic of chat.topics) {
@@ -82,6 +84,7 @@ function topicRow(chat, topic, empty) {
 		<td></td>
 		<td></td>
 		<td></td>
+		<td class="wrap"></td>
 	`;
 	if (empty) {
 		tr.querySelector("td:nth-child(4)").innerHTML = '<span class="hint">ещё нет сообщений</span>';
@@ -90,6 +93,7 @@ function topicRow(chat, topic, empty) {
 	tr.children[3].appendChild(toggleSwitch(topic.aiJokesEnabled, (checked) => setTopicToggle(chat.chatId, topic.threadId, { aiJokesEnabled: checked })));
 	tr.children[4].appendChild(toggleSwitch(topic.yesNoEnabled, (checked) => setTopicToggle(chat.chatId, topic.threadId, { yesNoEnabled: checked })));
 	tr.children[5].appendChild(toggleSwitch(topic.muteVoteEnabled, (checked) => setTopicToggle(chat.chatId, topic.threadId, { muteVoteEnabled: checked })));
+	tr.children[6].textContent = topic.summary ?? (topic.aiJokesEnabled ? "(ещё не собрана)" : "—");
 	return tr;
 }
 
@@ -299,20 +303,90 @@ async function loadAiStats() {
 	chatsBody.innerHTML = byChat.map((row) => `<tr><td>${row.chatId}</td><td>${row.calls}</td><td>${formatUsd(row.costUsd)}</td></tr>`).join("");
 }
 
+// ---- Ответы AI ----
+
+async function loadAiReplies() {
+	const chatId = el("ai-replies-chat-id").value.trim();
+	const params = new URLSearchParams();
+	if (chatId) params.set("chatId", chatId);
+	const replies = await api(`/ai-replies?${params.toString()}`);
+
+	const tbody = document.querySelector("#ai-replies-table tbody");
+	tbody.innerHTML = "";
+	for (const r of replies) {
+		const mainRow = document.createElement("tr");
+		mainRow.className = "expandable-row";
+		mainRow.innerHTML = `
+			<td>${new Date(r.createdAt).toLocaleString("ru-RU")}</td>
+			<td>${r.chatId}</td>
+			<td>${r.threadId}</td>
+			<td>${r.kind}</td>
+			<td>${r.tone ?? "—"}</td>
+			<td class="wrap">${escapeHtml(r.replyText)}</td>
+			<td>${formatUsd(r.costUsd)}</td>
+		`;
+
+		const detailRow = document.createElement("tr");
+		detailRow.hidden = true;
+		const detailCell = document.createElement("td");
+		detailCell.colSpan = 7;
+		detailCell.className = "wrap";
+		detailCell.innerHTML = `
+			<p><strong>Промпт (system):</strong><br>${escapeHtml(r.promptText)}</p>
+			<p><strong>Контекст (user):</strong><br>${escapeHtml(r.userContent)}</p>
+			<p class="hint">provider: ${r.provider}, prompt_tokens: ${r.promptTokens}, completion_tokens: ${r.completionTokens}</p>
+		`;
+		detailRow.appendChild(detailCell);
+
+		mainRow.addEventListener("click", () => (detailRow.hidden = !detailRow.hidden));
+		tbody.append(mainRow, detailRow);
+	}
+}
+
+el("ai-replies-load").addEventListener("click", loadAiReplies);
+
 // ---- Голосования ----
 
-el("votes-load").addEventListener("click", async () => {
+async function loadVotes() {
 	const chatId = el("votes-chat-id").value.trim();
-	if (!chatId) return;
-	const votes = await api(`/votes/${chatId}`);
+	const params = new URLSearchParams();
+	if (chatId) params.set("chatId", chatId);
+	const votes = await api(`/votes?${params.toString()}`);
+
 	const tbody = document.querySelector("#votes-table tbody");
 	tbody.innerHTML = votes
-		.map(
-			(v) =>
-				`<tr><td>${new Date(v.startedAt).toLocaleString("ru-RU")}</td><td>${v.threadId}</td><td>${v.targetName ?? v.targetTgId}</td><td>${v.requestedByTgId}</td><td>${v.status}</td></tr>`,
-		)
+		.map((v) => {
+			const unmuteBtn = v.status === "muted" ? `<button type="button" class="danger" data-unmute="${v.id}">Снять мьют</button>` : "";
+			return `<tr>
+				<td>${new Date(v.startedAt).toLocaleString("ru-RU")}</td>
+				<td>${v.chatId}</td>
+				<td>${v.topicName ?? v.threadId}</td>
+				<td>${v.targetName ?? v.targetTgId}</td>
+				<td>${v.requestedByTgId}</td>
+				<td>${v.yes} / ${v.no}</td>
+				<td>${v.status}</td>
+				<td>${unmuteBtn}</td>
+			</tr>`;
+		})
 		.join("");
-});
+
+	tbody.querySelectorAll("button[data-unmute]").forEach((btn) => {
+		btn.addEventListener("click", async () => {
+			btn.disabled = true;
+			btn.textContent = "Снимаю…";
+			try {
+				await api(`/votes/${btn.dataset.unmute}/unmute`, { method: "POST" });
+				loadVotes();
+			} catch (err) {
+				alert(`Не удалось снять мьют: ${err.message}`);
+				btn.disabled = false;
+				btn.textContent = "Снять мьют";
+			}
+		});
+	});
+}
+
+el("votes-load").addEventListener("click", loadVotes);
 
 // ---- Логи ----
 

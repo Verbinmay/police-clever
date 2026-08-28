@@ -26,5 +26,5 @@ startMessageCleanupCron(botApp.repos.messages, botApp.logger);
 // Админка живёт в том же процессе и на том же порту — /webhook и /health
 // уже заняты createBotApp, всё остальное (сессии + API + статика)
 // навешивается поверх того же Express-приложения.
-await mountAdmin(botApp.app, botApp.repos, botApp.logger);
+await mountAdmin(botApp.app, botApp.repos, botApp.logger, botApp.bot.telegram);
 botApp.logger.info("Admin panel mounted");
