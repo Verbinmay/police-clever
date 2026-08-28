@@ -53,5 +53,17 @@ export async function mountAdmin(app: Express, repos: Repositories, logger: Logg
 	app.use("/api/logs", requireSession, createLogsRouter(repos.logs));
 	app.use("/api/accounts", requireSession, createAccountsRouter(repos.adminAccounts));
 
-	app.use(express.static(path.join(__dirname, "public")));
+	// no-cache (не no-store) — браузер/Cloudflare обязаны каждый раз
+	// перепроверять по ETag, а не тупо переиспользовать старую копию. Без
+	// этого Cloudflare сам кэширует .js/.css на 4 часа по умолчанию (по
+	// расширению файла, независимо от того, что реально отдаёт Express) —
+	// после любого обновления панели админка тихо продолжает работать на
+	// старой версии app.js, пока кэш не истечёт сам.
+	app.use(
+		express.static(path.join(__dirname, "public"), {
+			etag: true,
+			lastModified: true,
+			setHeaders: (res) => res.setHeader("Cache-Control", "no-cache"),
+		}),
+	);
 }
