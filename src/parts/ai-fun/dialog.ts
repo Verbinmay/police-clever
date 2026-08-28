@@ -17,15 +17,19 @@ export interface ChatContext {
  * старого подхода "последние 4 сообщения", где объём context никак не был
  * привязан к его реальному размеру в символах.
  */
-export async function buildChatContext(messages: MessagesRepository, chatId: string, threadId: string, config: AiConfig): Promise<ChatContext> {
+export async function buildChatContext(messages: MessagesRepository, chatId: string, threadId: string, config: AiConfig, botName?: string): Promise<ChatContext> {
 	const fetchCount = Math.max(config.activeParticipantsLookback, 10);
 	const rows = await messages.findLastNInThread(chatId, threadId, fetchCount);
 
+	// botName исключаем из "активных участников" — это имя, под которым бот
+	// сам сохраняет свои реплики (см. ai-fun/index.ts), не реальный человек.
+	// Без исключения бот мог бы выбрать сам себя целью для targeted/sarcasm
+	// шутки ({target} подставляется случайным активным участником, tone.ts).
 	const participantsWindow = rows.slice(-config.activeParticipantsLookback);
 	const activeParticipants: string[] = [];
 	for (let i = participantsWindow.length - 1; i >= 0; i--) {
 		const name = participantsWindow[i]?.fromName;
-		if (name && !activeParticipants.includes(name)) activeParticipants.push(name);
+		if (name && name !== botName && !activeParticipants.includes(name)) activeParticipants.push(name);
 	}
 
 	const lines: string[] = [];

@@ -36,3 +36,8 @@ export async function rollGacha(settings: SettingsRepository, chatId: string, th
 	await settings.set(PART_ID, key, counter + 1);
 	return false;
 }
+
+/** Текущее значение счётчика гачи темы, без побочных эффектов — для отображения в панели (не крутит саму гачу). */
+export async function peekGachaCounter(settings: SettingsRepository, chatId: string, threadId: string): Promise<number> {
+	return settings.get<number>(PART_ID, counterKey(chatId, threadId), 1);
+}

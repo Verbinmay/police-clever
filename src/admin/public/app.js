@@ -87,6 +87,7 @@ function topicRow(chat, topic, empty) {
 		<td class="wrap"></td>
 		<td></td>
 		<td></td>
+		<td></td>
 	`;
 	if (empty) {
 		tr.querySelector("td:nth-child(4)").innerHTML = '<span class="hint">ещё нет сообщений</span>';
@@ -96,10 +97,13 @@ function topicRow(chat, topic, empty) {
 	tr.children[4].appendChild(toggleSwitch(topic.yesNoEnabled, (checked) => setTopicToggle(chat.chatId, topic.threadId, { yesNoEnabled: checked })));
 	tr.children[5].appendChild(toggleSwitch(topic.muteVoteEnabled, (checked) => setTopicToggle(chat.chatId, topic.threadId, { muteVoteEnabled: checked })));
 	tr.children[6].textContent = topic.summary ?? (topic.aiJokesEnabled ? "(ещё не собрана)" : "—");
+	// Гача вероятностная (см. gacha.ts) — счётчик это "гарантированно не
+	// позже чем через N", реально может сработать и раньше.
+	tr.children[7].textContent = topic.aiJokesEnabled ? `${topic.gachaCounter}/${topic.gachaGuaranteedAt} (может раньше)` : "—";
 	// Кулдаун и дневной кап — счётчики на весь ЧАТ (не на тему, см. cooldown.ts),
 	// поэтому одинаковы во всех строках тем одного чата.
-	tr.children[7].textContent = chat.cooldownRemainingMin > 0 ? `ещё ${chat.cooldownRemainingMin} мин` : "—";
-	tr.children[8].textContent = chat.dailyCapRemainingMin > 0 ? `ещё ${chat.dailyCapRemainingMin} мин` : "—";
+	tr.children[8].textContent = chat.cooldownRemainingMin > 0 ? `ещё ${chat.cooldownRemainingMin} мин` : "—";
+	tr.children[9].textContent = chat.dailyCapRemainingMin > 0 ? `ещё ${chat.dailyCapRemainingMin} мин` : "—";
 	return tr;
 }
 

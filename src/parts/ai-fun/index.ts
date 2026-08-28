@@ -5,7 +5,7 @@ import { config as appConfig } from "../../config.ts";
 import type { AiUsageKind } from "../../db/entities/AiUsage.ts";
 import type { SettingsRepository } from "../../db/repositories/settings-repository.ts";
 import { cropTextForMessage } from "../../shared/crop-text-for-message.ts";
-import { getThreadId, isGroupChat } from "../../shared/telegram.ts";
+import { displayName, getThreadId, isGroupChat } from "../../shared/telegram.ts";
 import { type AiClient, createAiClient } from "./ai-client.ts";
 import { estimateCostUsd, isOverMonthlyBudget } from "./budget.ts";
 import { loadAiConfig } from "./config.ts";
@@ -159,7 +159,8 @@ export function createAiFunPart(): PartDefinition {
 				}
 
 				const kind: AiUsageKind = isTriggered ? "trigger" : "gacha";
-				const context = await buildChatContext(repos.messages, chatId, threadId, config);
+				const botName = displayName(ctx.botInfo) ?? "бот";
+				const context = await buildChatContext(repos.messages, chatId, threadId, config, botName);
 				const summary = await getSummary(repos.settings, chatId, threadId);
 
 				const picked = isTriggered ? null : pickAction(config, context.activeParticipants);
@@ -180,6 +181,14 @@ export function createAiFunPart(): PartDefinition {
 				for (const chunk of cropTextForMessage(reply.text)) {
 					await ctx.telegram.sendMessage(chatId, chunk, { message_thread_id: toThreadIdParam(threadId) }).catch(() => {});
 				}
+
+				// Свои же реплики бот раньше нигде не сохранял (messages.save
+				// вызывает только core на ВХОДЯЩИХ апдейтах, а это прямой исходящий
+				// вызов) — из-за этого сводка и сырой контекст были "слепы" к
+				// собственным словам бота, не только к чужим. botName исключён из
+				// activeParticipants в buildChatContext — бот не должен шутить/
+				// докапываться сам на себя.
+				await repos.messages.save({ chatId, threadId, tgId: String(ctx.botInfo?.id ?? "0"), fromName: botName, text: reply.text });
 
 				const costUsd = estimateCostUsd(reply.promptTokens, reply.completionTokens, config.providers[config.provider]);
 				await repos.aiUsage.record({
