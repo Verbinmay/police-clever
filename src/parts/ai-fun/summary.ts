@@ -16,6 +16,10 @@ function counterKey(chatId: string, threadId: string): string {
 const SUMMARY_PROMPT =
 	"Сожми переписку в одну краткую сводку атмосферы разговора (не пересказ по пунктам): кто активен, какая тема, кто на кого шутит/огрызается, чей юмор заходит. Только сама сводка, 2-4 предложения, без вступлений.";
 
+/** Используется вместо SUMMARY_PROMPT, когда config.summary.cumulative включён и есть что обновлять — старая сводка идёт первой строкой во входном тексте. */
+const SUMMARY_PROMPT_CUMULATIVE =
+	"Вот предыдущая сводка атмосферы чата и новые сообщения после неё. Обнови сводку: сохрани то, что всё ещё актуально, замени устаревшее свежим. Только сама обновлённая сводка, 2-4 предложения, без вступлений.";
+
 /** Текущая сохранённая сводка темы (null, если ещё ни разу не собиралась). На (chatId, threadId), не только chatId — иначе разные темы одного чата делили бы одну сводку. */
 export async function getSummary(settings: SettingsRepository, chatId: string, threadId: string): Promise<string | null> {
 	return settings.get<string | null>(PART_ID, summaryKey(chatId, threadId), null);
@@ -59,7 +63,20 @@ export async function maybeUpdateSummary(
 			return;
 		}
 
-		const reply = await aiClient.getReply(SUMMARY_PROMPT, dialogText, logger, config.summary.maxTokens);
+		// Накопительный режим: старая сводка идёт первой частью входа, модель
+		// её обновляет, а не пишет с нуля. Если сводки ещё не было (первое
+		// обновление темы) — вести себя как в обычном режиме, подмешивать нечего.
+		let prompt = SUMMARY_PROMPT;
+		let input = dialogText;
+		if (config.summary.cumulative) {
+			const previous = await getSummary(settings, chatId, threadId);
+			if (previous) {
+				prompt = SUMMARY_PROMPT_CUMULATIVE;
+				input = `Предыдущая сводка: ${previous}\n\nНовые сообщения:\n${dialogText}`;
+			}
+		}
+
+		const reply = await aiClient.getReply(prompt, input, logger, config.summary.maxTokens);
 		await settings.set(PART_ID, counterKey(chatId, threadId), 0);
 		if (!reply) {
 			logger.warn("Summary refresh produced no reply", { chatId, threadId });
