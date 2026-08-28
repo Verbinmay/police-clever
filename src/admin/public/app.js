@@ -155,6 +155,7 @@ async function loadAiConfig() {
 	el("ai-summary-lookback").value = config.summary.lookbackMessages;
 	el("ai-summary-maxchars").value = config.summary.maxChars;
 	el("ai-summary-maxtokens").value = config.summary.maxTokens;
+	el("ai-summary-cumulative").checked = config.summary.cumulative;
 
 	el("tone-general").value = config.toneWeights.general;
 	el("tone-targeted").value = config.toneWeights.targeted;
@@ -215,6 +216,7 @@ el("ai-config-save").addEventListener("click", async () => {
 					lookbackMessages: Number(el("ai-summary-lookback").value),
 					maxChars: Number(el("ai-summary-maxchars").value),
 					maxTokens: Number(el("ai-summary-maxtokens").value),
+					cumulative: el("ai-summary-cumulative").checked,
 				},
 
 				toneWeights: {
