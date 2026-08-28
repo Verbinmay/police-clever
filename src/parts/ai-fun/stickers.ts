@@ -10,6 +10,11 @@ interface StickerCache {
 }
 
 let cache: StickerCache | null = null;
+// Не идеальная равномерность (при 2 попытках подряд совпасть с прошлым
+// эквивалентно перевзвешиванию остальных вариантов на 1/(N-1) вместо 1/N),
+// но для заметки "опять та же картинка" в чате этого достаточно — не
+// пытаемся сделать полноценный shuffle-bag без повторов.
+let lastSentFileId: string | null = null;
 
 /**
  * Случайный file_id из стикерпака (фолбэк на триггер-слово, когда лимит
@@ -32,6 +37,14 @@ export async function getRandomStickerFileId(telegram: Telegram, setName: string
 	}
 
 	if (cache.fileIds.length === 0) return null;
+
 	// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-	return cache.fileIds[Math.floor(Math.random() * cache.fileIds.length)]!;
+	let pick = cache.fileIds[Math.floor(Math.random() * cache.fileIds.length)]!;
+	if (pick === lastSentFileId && cache.fileIds.length > 1) {
+		// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+		pick = cache.fileIds[Math.floor(Math.random() * cache.fileIds.length)]!;
+	}
+
+	lastSentFileId = pick;
+	return pick;
 }
