@@ -194,7 +194,7 @@
 						<input type="number" id="ai-guaranteed" min="1" />
 					</div>
 					<div class="form-row">
-						<label>Кривая гачи (JSON: [{"upToCounter":20,"probability":0.005}, ...])</label>
+						<label>Кривая гачи (JSON: [{"upToFraction":0.3,"probability":0.005}, ...] — upToFraction это доля пути до "гарантированного" порога выше, 0-1, а не абсолютный номер сообщения — при изменении порога кривая пересчитывается сама)</label>
 						<textarea id="ai-curve"></textarea>
 					</div>
 				</div>
