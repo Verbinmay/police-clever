@@ -30,8 +30,15 @@ export interface PickedAction {
  * targeted/sarcasm/praise пытается подставить случайного "активного"
  * участника — если участников нет (пустой список), откатывается на
  * general, чтобы не отправить шутку с плейсхолдером "{target}" в тексте.
+ *
+ * preferredTarget — для триггера по имени: тот, кто позвал бота. Раньше
+ * {target} всегда выбирался случайно из последних 20 активных, и ответ
+ * получался раздвоенным — "по существу" привязан к тому, кто написал, а
+ * сама шутка сценария могла достаться совсем другому человеку. 70% —
+ * подставляем именно позвавшего, 30% оставляем случайность (чтобы не
+ * потерять элемент "непонятно, на кого прилетит").
  */
-export function pickAction(config: AiConfig, activeParticipants: string[]): PickedAction {
+export function pickAction(config: AiConfig, activeParticipants: string[], preferredTarget?: string): PickedAction {
 	let tone = pickTone(config.toneWeights);
 
 	if (tone !== "general" && activeParticipants.length === 0) {
@@ -45,7 +52,7 @@ export function pickAction(config: AiConfig, activeParticipants: string[]): Pick
 		return { tone, action: template };
 	}
 
-	const target = pickRandom(activeParticipants);
+	const target = preferredTarget && Math.random() < 0.7 ? preferredTarget : pickRandom(activeParticipants);
 	if (!target) {
 		// Не должно случиться (проверили выше), но на всякий случай не шлём "{target}" в промпт как есть.
 		const fallback = pickRandom(config.actionsByTone.general) ?? "Пошути на тему разговора";
