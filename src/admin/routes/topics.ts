@@ -28,8 +28,9 @@ export function createTopicsRouter(chats: ChatsRepository, topics: TopicsReposit
 
 		// Гача — вероятностная и может сработать раньше guaranteedAt (см.
 		// gacha.ts) — счётчик тут это "не позже чем через", а не точный таймер.
-		const gachaCounters = await Promise.all(aiTopics.map(async (t) => [`${t.chatId}:${t.threadId}`, await peekGachaCounter(settings, t.chatId, t.threadId)] as const));
-		const gachaCounterByKey = new Map(gachaCounters);
+		// Один общий счётчик на весь бот (не на тему) — показываем на каждой
+		// строке темы с AI-шутками одно и то же значение.
+		const gachaCounter = await peekGachaCounter(settings);
 
 		const topicsByChat = new Map<string, typeof allTopics>();
 		for (const topic of allTopics) {
@@ -64,7 +65,7 @@ export function createTopicsRouter(chats: ChatsRepository, topics: TopicsReposit
 				topics: (topicsByChat.get(chat.chatId) ?? []).map((t) => ({
 					...t,
 					summary: summaryByKey.get(`${t.chatId}:${t.threadId}`) ?? null,
-					gachaCounter: t.aiJokesEnabled ? (gachaCounterByKey.get(`${t.chatId}:${t.threadId}`) ?? 1) : null,
+					gachaCounter: t.aiJokesEnabled ? gachaCounter : null,
 					gachaGuaranteedAt: aiConfig.gachaGuaranteedAt,
 				})),
 			})),
@@ -91,26 +92,15 @@ export function createTopicsRouter(chats: ChatsRepository, topics: TopicsReposit
 		res.json(updated);
 	});
 
-	/** Ручная правка счётчика гачи темы из панели — ускорить/отодвинуть гарантированный ответ, не дожидаясь реальных сообщений. */
-	router.put("/:chatId/:threadId/gacha-counter", async (req, res) => {
-		const { chatId, threadId } = req.params;
+	/** Ручная правка ОБЩЕГО счётчика гачи (один на весь бот, см. gacha.ts) из панели — ускорить/отодвинуть гарантированный ответ, не дожидаясь реальных сообщений. */
+	router.put("/gacha-counter", async (req, res) => {
 		const { value } = req.body as { value?: number };
-		if (!chatId || !threadId) {
-			res.status(400).json({ error: "chatId/threadId обязательны" });
-			return;
-		}
 		if (typeof value !== "number" || !Number.isFinite(value)) {
 			res.status(400).json({ error: "value должен быть числом" });
 			return;
 		}
 
-		const topic = await topics.get(chatId, threadId);
-		if (!topic) {
-			res.status(404).json({ error: "Тема не найдена" });
-			return;
-		}
-
-		await setGachaCounter(settings, chatId, threadId, value);
+		await setGachaCounter(settings, value);
 		res.json({ ok: true, value: Math.max(1, Math.floor(value)) });
 	});
 

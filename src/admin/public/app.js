@@ -102,7 +102,7 @@ function topicRow(chat, topic, empty) {
 	// редактируемое — можно подвинуть ближе к гарантии (ответит скорее)
 	// или отодвинуть (ответит позже), не дожидаясь реальных сообщений.
 	if (topic.aiJokesEnabled) {
-		tr.children[7].appendChild(gachaCounterEditor(chat.chatId, topic.threadId, topic.gachaCounter, topic.gachaGuaranteedAt));
+		tr.children[7].appendChild(gachaCounterEditor(topic.gachaCounter, topic.gachaGuaranteedAt));
 	} else {
 		tr.children[7].textContent = "—";
 	}
@@ -113,7 +113,10 @@ function topicRow(chat, topic, empty) {
 	return tr;
 }
 
-function gachaCounterEditor(chatId, threadId, value, guaranteedAt) {
+// Счётчик гачи один на весь бот (см. gacha.ts) — редактируется с любой
+// строки, но после сохранения перезагружаем всю таблицу, чтобы значение
+// не разъехалось по остальным строкам, которые показывают тот же счётчик.
+function gachaCounterEditor(value, guaranteedAt) {
 	const wrap = document.createElement("span");
 	const input = document.createElement("input");
 	input.type = "number";
@@ -123,7 +126,7 @@ function gachaCounterEditor(chatId, threadId, value, guaranteedAt) {
 	input.style.width = "60px";
 	const suffix = document.createElement("span");
 	suffix.className = "hint";
-	suffix.textContent = ` / ${guaranteedAt} (может раньше)`;
+	suffix.textContent = ` / ${guaranteedAt} (может раньше, общий счётчик на весь бот)`;
 
 	input.addEventListener("change", async () => {
 		const next = Number(input.value);
@@ -132,8 +135,8 @@ function gachaCounterEditor(chatId, threadId, value, guaranteedAt) {
 			return;
 		}
 		try {
-			await api(`/topics/${chatId}/${threadId}/gacha-counter`, { method: "PUT", body: { value: next } });
-			value = next;
+			await api("/topics/gacha-counter", { method: "PUT", body: { value: next } });
+			loadTopics();
 		} catch (err) {
 			alert(`Не удалось изменить счётчик: ${err.message}`);
 			input.value = value;
