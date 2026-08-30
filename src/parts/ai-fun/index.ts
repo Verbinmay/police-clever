@@ -173,7 +173,13 @@ export function createAiFunPart(): PartDefinition {
 				// нейтральную вежливую фразу. Теперь сценарий выбирается всегда,
 				// для обоих видов — просто для триггера сверху добавляется
 				// требование остаться по существу того, что реально написали.
-				const picked = pickAction(config, context.activeParticipants);
+				//
+				// preferredTarget — тот, кто позвал бота: без этого {target}
+				// сценария выбирался случайно из последних 20 активных, и ответ
+				// раздваивался (по существу — про позвавшего, шутка сценария —
+				// про кого-то третьего). См. tone.ts.
+				const addressorName = isTriggered ? (displayName(ctx.from) ?? undefined) : undefined;
+				const picked = pickAction(config, context.activeParticipants, addressorName);
 
 				// Если триггер-сообщение — реплай, само по себе оно часто
 				// бессмысленно без цитаты ("а он тебе на это что скажет?") — без
@@ -186,7 +192,25 @@ export function createAiFunPart(): PartDefinition {
 					? ` Это реплай на сообщение ${displayName("from" in replyTo && replyTo.from ? replyTo.from : undefined) ?? "кого-то"}: "${quotedText}".`
 					: "";
 
-				const action = isTriggered ? `Тебе написали: "${text}"${replyContext} — ответь по существу этого. ${picked.action}` : picked.action;
+				// Голое обращение ("Реня" без ничего ещё) не даёт модели ничего,
+				// к чему привязать "ответь по существу" — кроме случая, когда это
+				// реплай (тогда цитата и есть содержание). Порог 12 символов —
+				// произвольный, но короче обычно только само триггер-слово с
+				// частицами ("реня", "эй реня").
+				const strippedText = config.triggerWords
+					.reduce((acc, word) => {
+						if (!word) return acc;
+						const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+						return acc.replace(new RegExp(escaped, "gi"), "");
+					}, text)
+					.trim();
+				const hasRealContent = strippedText.length >= 12 || Boolean(quotedText);
+
+				const action = isTriggered
+					? hasRealContent
+						? `Тебе написали: "${text}"${replyContext} — ответь по существу этого. ${picked.action}`
+						: `Тебя просто позвали по имени без повода — ответь в характере, как будто тебя дёрнули без дела. ${picked.action}`
+					: picked.action;
 				const prompt = buildSystemPrompt(config, action);
 				const userContent = buildUserContent(context, summary);
 
