@@ -174,7 +174,19 @@ export function createAiFunPart(): PartDefinition {
 				// для обоих видов — просто для триггера сверху добавляется
 				// требование остаться по существу того, что реально написали.
 				const picked = pickAction(config, context.activeParticipants);
-				const action = isTriggered ? `Тебе написали: "${text}" — ответь по существу этого. ${picked.action}` : picked.action;
+
+				// Если триггер-сообщение — реплай, само по себе оно часто
+				// бессмысленно без цитаты ("а он тебе на это что скажет?") — без
+				// неё модель отвечает вслепую и скатывается в общие фразы.
+				// caption — на случай реплая на фото/видео с подписью, а не
+				// на чистый текст.
+				const replyTo = ctx.message.reply_to_message;
+				const quotedText = replyTo && ("text" in replyTo ? replyTo.text : "caption" in replyTo ? replyTo.caption : undefined);
+				const replyContext = quotedText
+					? ` Это реплай на сообщение ${displayName("from" in replyTo && replyTo.from ? replyTo.from : undefined) ?? "кого-то"}: "${quotedText}".`
+					: "";
+
+				const action = isTriggered ? `Тебе написали: "${text}"${replyContext} — ответь по существу этого. ${picked.action}` : picked.action;
 				const prompt = buildSystemPrompt(config, action);
 				const userContent = buildUserContent(context, summary);
 
