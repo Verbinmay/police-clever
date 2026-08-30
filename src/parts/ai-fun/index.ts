@@ -39,19 +39,21 @@ const API_KEYS: Record<ProviderId, string> = {
  * tone.ts) — плюс лёгкий бесплатный флейвор на "да"/"нет" (свой тумблер,
  * не расходует AI-бюджет, работает независимо от AI-шуток).
  *
- * Что на ЧАТ, а что на ТЕМУ — сознательно по-разному:
+ * Что общее, а что на ТЕМУ — сознательно по-разному:
  *  - Кулдаун между AI-ответами (cooldown.ts) и дневной кап
  *    (dailyCallCapPerChat) — НА ВЕСЬ ЧАТ. Это рычаги стоимости: если бы
  *    они были на тему, чат с 5 активными темами генерил бы в 5 раз больше
  *    AI-ответов за то же время, чем чат с одной — ровно то, чего нельзя
  *    допускать (иначе владельца легко "обонкротить", просто включив
  *    AI-шутки в кучe тем).
- *  - Счётчик гачи (gacha.ts) и роллинг-саммари (summary.ts) — НА ТЕМУ.
- *    Это про "память"/атмосферу конкретного разговора, а не про деньги —
- *    разные темы одного чата не должны путать контекст друг друга. Общий
- *    кулдаун всё равно остаётся последним словом: даже если гача выиграла
- *    сразу в двух темах, реально ответит только одна — вторая просто
- *    "сгорит" молча.
+ *  - Счётчик пассивной гачи (gacha.ts) — ОДИН НА ВЕСЬ БОТ, все чаты
+ *    вместе. Раньше был на тему — но независимые счётчики на каждый
+ *    включённый чат по сути размножали общую частоту срабатываний
+ *    пропорционально числу чатов (те же 5 тем — 5 параллельных гонок к
+ *    порогу). Единый розыгрыш честнее и предсказуемее по частоте.
+ *  - Роллинг-саммари (summary.ts) — НА ТЕМУ. Это про "память"/атмосферу
+ *    конкретного разговора, а не про частоту ответов — разные темы
+ *    одного чата не должны путать контекст друг друга.
  *  - Глобальный месячный $ потолок (budget.ts) — НА ВЕСЬ БОТ, все чаты
  *    вместе.
  *
@@ -138,7 +140,7 @@ export function createAiFunPart(): PartDefinition {
 				// Регистронезависимо — "Реван"/"реван"/"РЕВАН" все должны срабатывать одинаково.
 				const lowerText = text.toLowerCase();
 				const isTriggered = config.triggerWords.some((word) => word && lowerText.includes(word.toLowerCase()));
-				const wantsGacha = !isTriggered && (await rollGacha(repos.settings, chatId, threadId, config));
+				const wantsGacha = !isTriggered && (await rollGacha(repos.settings, config));
 				if (!isTriggered && !wantsGacha) return next();
 
 				if (!aiClient) return next(); // провайдер выбран, но ключ не настроен — уже залогировано выше
@@ -163,8 +165,16 @@ export function createAiFunPart(): PartDefinition {
 				const context = await buildChatContext(repos.messages, chatId, threadId, config, botName);
 				const summary = await getSummary(repos.settings, chatId, threadId);
 
-				const picked = isTriggered ? null : pickAction(config, context.activeParticipants);
-				const action = isTriggered ? `${text} - тебе написали, ответь` : picked!.action;
+				// Раньше триггер по имени получал только голую инструкцию "тебе
+				// написали, ответь" — без сценария на выбор, в отличие от гачи
+				// (там их всегда 20+ на выбор). На практике это и давало самые
+				// пресные ответы в логе ("Она всегда была слишком наблюдательной"
+				// и т.п.) — без творческой установки модель откатывается на
+				// нейтральную вежливую фразу. Теперь сценарий выбирается всегда,
+				// для обоих видов — просто для триггера сверху добавляется
+				// требование остаться по существу того, что реально написали.
+				const picked = pickAction(config, context.activeParticipants);
+				const action = isTriggered ? `Тебе написали: "${text}" — ответь по существу этого. ${picked.action}` : picked.action;
 				const prompt = buildSystemPrompt(config, action);
 				const userContent = buildUserContent(context, summary);
 
