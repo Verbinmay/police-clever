@@ -14,11 +14,23 @@ import { DEFAULT_PROVIDERS, type ProviderId, type ProviderModelConfig } from "./
  * активностью), а провайдер и месячный $ бюджет — см. providers.ts/budget.ts.
  */
 export interface GachaRange {
-	/** Верхняя граница счётчика, при которой действует эта вероятность (включительно). */
-	upToCounter: number;
+	/**
+	 * Верхняя граница ДОЛИ пути до gachaGuaranteedAt (0-1, включительно), при
+	 * которой действует эта вероятность — не абсолютное значение счётчика.
+	 * Было upToCounter (абсолютное число) — но тогда правка одного
+	 * gachaGuaranteedAt в панели молча рассинхронизировала кривую: например,
+	 * gachaGuaranteedAt поменяли со 140 на 50, а сама кривая (тиры до
+	 * 20/40/90/999999) осталась прежней — тиры 90 и 999999 стали
+	 * недостижимы (гарантия срабатывала раньше их), а реальный "разгон"
+	 * шансов к концу пропал: с 41 по 49 вероятность так и держалась на
+	 * 2%, а потом резкий скачок сразу на 100% — не "как в реальной гаче",
+	 * где шансы растут постепенно. Доля от gachaGuaranteedAt сама
+	 * пересчитывается при любой правке порога — рассинхрона больше не будет.
+	 */
+	upToFraction: number;
 	probability: number;
 }
-// Последний элемент gachaCurve — это "иначе": для counter больше upToCounter
+// Последний элемент gachaCurve — это "иначе": для доли пути больше upToFraction
 // всех элементов берётся вероятность последнего элемента массива. Явного
 // Infinity не храним — jsonb/JSON.stringify не умеет его сериализовать.
 
@@ -183,11 +195,15 @@ export const DEFAULT_AI_CONFIG: AiConfig = {
 		maxTokens: 220,
 		cumulative: false,
 	},
+	// Настоящий "soft pity" — большую часть пути шанс низкий и почти не
+	// растёт, а в последней пятой части перед гарантией заметно разгоняется
+	// (10% → 30%), а не плоские 2% до самого конца с резким скачком в 100%.
 	gachaCurve: [
-		{ upToCounter: 20, probability: 0.005 },
-		{ upToCounter: 40, probability: 0.01 },
-		{ upToCounter: 90, probability: 0.02 },
-		{ upToCounter: 999999, probability: 0.05 }, // "иначе" — см. комментарий у GachaRange
+		{ upToFraction: 0.3, probability: 0.005 },
+		{ upToFraction: 0.6, probability: 0.015 },
+		{ upToFraction: 0.8, probability: 0.04 },
+		{ upToFraction: 0.92, probability: 0.1 },
+		{ upToFraction: 1, probability: 0.3 }, // "иначе" — см. комментарий у GachaRange
 	],
 	gachaGuaranteedAt: 140,
 	yesAnswers: ["пизда", "манда", "балда", "хуй на", "джигурда", "елда"],

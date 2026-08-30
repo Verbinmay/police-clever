@@ -4,8 +4,10 @@ import type { AiConfig } from "./default-config.ts";
 const PART_ID = "ai";
 const COUNTER_KEY = "gacha:global";
 
-function probabilityForCounter(curve: AiConfig["gachaCurve"], counter: number): number {
-	const range = curve.find((r) => counter <= r.upToCounter);
+/** Доля пути от counter до gachaGuaranteedAt (0-1) — тиры кривой заданы в долях, а не в абсолютном счётчике, см. GachaRange. */
+function probabilityForCounter(curve: AiConfig["gachaCurve"], counter: number, guaranteedAt: number): number {
+	const fraction = guaranteedAt > 0 ? counter / guaranteedAt : 1;
+	const range = curve.find((r) => fraction <= r.upToFraction);
 	return (range ?? curve[curve.length - 1])?.probability ?? 0;
 }
 
@@ -29,7 +31,7 @@ export async function rollGacha(settings: SettingsRepository, config: AiConfig):
 		return true;
 	}
 
-	const probability = probabilityForCounter(config.gachaCurve, counter);
+	const probability = probabilityForCounter(config.gachaCurve, counter, config.gachaGuaranteedAt);
 	if (Math.random() < probability) {
 		await settings.set(PART_ID, COUNTER_KEY, 1);
 		return true;
