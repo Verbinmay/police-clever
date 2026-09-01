@@ -30,6 +30,12 @@ export interface AiReply {
  * персонажа) — отключаем его явно параметром thinking.type="disabled"
  * (формат, который DeepSeek поддерживает поверх OpenAI-совместимого
  * протокола; для остальных провайдеров поле не отправляется).
+ *
+ * OpenAI: та же болезнь у gpt-5-mini — по умолчанию reasoning-модель,
+ * при maxTokens=130 весь бюджет уходит в reasoning_tokens, content
+ * приходит пустым (finish_reason: "length"), проверено вживую. Лечится
+ * тем же способом — reasoning_effort: "minimal" (0 reasoning-токенов,
+ * реальный content, finish_reason: "stop").
  */
 export function createAiClient(provider: ProviderModelConfig, apiKey: string, providerId: ProviderId) {
 	const openai = new OpenAI({ baseURL: provider.baseUrl, apiKey, maxRetries: 4 });
@@ -56,8 +62,9 @@ export function createAiClient(provider: ProviderModelConfig, apiKey: string, pr
 					} else {
 						params.max_tokens = maxTokens;
 					}
-					// Поле не из типов openai SDK — специфика DeepSeek, шлём как есть поверх типизированного вызова.
+					// Поля не из типов openai SDK — специфика провайдеров, шлём как есть поверх типизированного вызова.
 					if (providerId === "deepseek") params.thinking = { type: "disabled" };
+					if (providerId === "openai") params.reasoning_effort = "minimal";
 
 					const response = await openai.chat.completions.create(params as unknown as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming);
 					const text = response.choices[0]?.message?.content;
