@@ -217,6 +217,10 @@ export function createAiFunPart(): PartDefinition {
 				const reply = await aiClient.getReply(prompt, userContent, logger, config.maxTokens);
 				if (!reply) {
 					logger.warn("AI request produced no reply", { chatId, threadId, kind });
+					// Реальный сбой вызова (сеть/провайдер), а не блокировка лимитами —
+					// раньше тут не было даже стикера-заглушки, при живом баге (см.
+					// ai-client.ts) это означало полное молчание на прямое обращение.
+					if (isTriggered) await sendFallbackSticker(ctx, repos.settings, config, chatId, threadId);
 					return next();
 				}
 

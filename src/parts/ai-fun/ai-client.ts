@@ -45,8 +45,17 @@ export function createAiClient(provider: ProviderModelConfig, apiKey: string, pr
 							{ role: "user", content: dialogText },
 						],
 						temperature: 0.9,
-						max_tokens: maxTokens,
 					};
+					// Живой баг: OpenAI (gpt-5-mini) отклоняет max_tokens 400-й ошибкой
+					// ("Unsupported parameter... Use 'max_completion_tokens' instead")
+					// — новые модели требуют переименованный параметр, старый общий
+					// max_tokens больше не работает. DeepSeek по-прежнему принимает
+					// max_tokens нормально (все успешные вызовы это подтверждают).
+					if (providerId === "openai") {
+						params.max_completion_tokens = maxTokens;
+					} else {
+						params.max_tokens = maxTokens;
+					}
 					// Поле не из типов openai SDK — специфика DeepSeek, шлём как есть поверх типизированного вызова.
 					if (providerId === "deepseek") params.thinking = { type: "disabled" };
 
