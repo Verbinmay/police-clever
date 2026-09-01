@@ -50,3 +50,15 @@ export async function peekGachaCounter(settings: SettingsRepository): Promise<nu
 export async function setGachaCounter(settings: SettingsRepository, value: number): Promise<void> {
 	await settings.set(PART_ID, COUNTER_KEY, Math.max(1, Math.floor(value)));
 }
+
+/**
+ * Сброс счётчика на вызов по триггер-слову — чтобы прямое обращение по
+ * имени считалось наравне с пассивным выигрышем гачи, а не жило само по
+ * себе. Без этого пассивный счётчик тикает независимо от того, сколько
+ * раз бота позвали по имени, и "гарантированный" ответ может выпасть
+ * почти сразу после того, как бота уже позвали вручную — два AI-ответа
+ * подряд без паузы по смыслу.
+ */
+export async function resetGachaCounter(settings: SettingsRepository): Promise<void> {
+	await settings.set(PART_ID, COUNTER_KEY, 1);
+}

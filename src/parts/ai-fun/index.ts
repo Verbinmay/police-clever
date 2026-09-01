@@ -13,7 +13,7 @@ import { isOnCooldown, markCooldown } from "./cooldown.ts";
 import { buildChatContext, buildSystemPrompt, buildUserContent } from "./dialog.ts";
 import type { AiConfig } from "./default-config.ts";
 import { apiKeyEnvVar, type ProviderId } from "./providers.ts";
-import { rollGacha } from "./gacha.ts";
+import { resetGachaCounter, rollGacha } from "./gacha.ts";
 import { getRandomStickerFileId } from "./stickers.ts";
 import { getSummary, maybeUpdateSummary } from "./summary.ts";
 import { pickAction } from "./tone.ts";
@@ -140,6 +140,12 @@ export function createAiFunPart(): PartDefinition {
 				// Регистронезависимо — "Реван"/"реван"/"РЕВАН" все должны срабатывать одинаково.
 				const lowerText = text.toLowerCase();
 				const isTriggered = config.triggerWords.some((word) => word && lowerText.includes(word.toLowerCase()));
+				// Вызов по имени сбрасывает общий счётчик гачи наравне с пассивным
+				// выигрышем — иначе счётчик тикает сам по себе, и "гарантированный"
+				// ответ может выпасть почти сразу после того, как бота уже позвали
+				// вручную (см. gacha.ts). Сбрасываем на факт обращения, не дожидаясь
+				// успеха самого AI-вызова — это отсчёт активности, а не награда.
+				if (isTriggered) await resetGachaCounter(repos.settings);
 				const wantsGacha = !isTriggered && (await rollGacha(repos.settings, config));
 				if (!isTriggered && !wantsGacha) return next();
 
