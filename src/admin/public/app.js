@@ -195,6 +195,7 @@ async function loadAiConfig() {
 	el("ai-sticker-pack").value = config.stickerPackShortName;
 	el("ai-sticker-cooldown").value = config.stickerCooldownMinutes;
 
+	el("ai-summary-enabled").checked = config.summary.enabled;
 	el("ai-summary-every").value = config.summary.everyNMessages;
 	el("ai-summary-lookback").value = config.summary.lookbackMessages;
 	el("ai-summary-maxchars").value = config.summary.maxChars;
@@ -256,6 +257,7 @@ el("ai-config-save").addEventListener("click", async () => {
 				activeParticipantsLookback: Number(el("ai-participants-window").value),
 
 				summary: {
+					enabled: el("ai-summary-enabled").checked,
 					everyNMessages: Number(el("ai-summary-every").value),
 					lookbackMessages: Number(el("ai-summary-lookback").value),
 					maxChars: Number(el("ai-summary-maxchars").value),

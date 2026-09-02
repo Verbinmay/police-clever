@@ -21,8 +21,11 @@ export function createTopicsRouter(chats: ChatsRepository, topics: TopicsReposit
 		const [allChats, allTopics, aiConfig] = await Promise.all([chats.listAll(), topics.listAll(), loadAiConfig(settings)]);
 
 		// Сводка и счётчик гачи — только для тем с включёнными AI-шутками,
-		// остальным они всё равно не собираются/не крутятся.
-		const aiTopics = allTopics.filter((t) => t.aiJokesEnabled);
+		// остальным они всё равно не собираются/не крутятся. summary.enabled
+		// временно выключен целиком (см. SummaryConfig.enabled) — если так,
+		// не читаем БД вообще, чтобы в панели не показывать замороженную
+		// старую сводку как будто она живая.
+		const aiTopics = aiConfig.summary.enabled ? allTopics.filter((t) => t.aiJokesEnabled) : [];
 		const summaries = await Promise.all(aiTopics.map(async (t) => [`${t.chatId}:${t.threadId}`, await getSummary(settings, t.chatId, t.threadId)] as const));
 		const summaryByKey = new Map(summaries);
 
