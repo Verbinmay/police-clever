@@ -132,8 +132,10 @@ export function createAiFunPart(): PartDefinition {
 
 				// Обслуживание саммари (на тему) не зависит от того, сработает ли
 				// шутка на этом конкретном сообщении — считает объём независимо.
-				// Без живого клиента (ключ не задан) просто пропускаем.
-				if (aiClient) {
+				// Без живого клиента (ключ не задан) просто пропускаем. config.summary.enabled —
+				// временно выключено целиком (см. doc-комментарий у SummaryConfig.enabled):
+				// сводка залипала на устаревшей теме сильнее, чем сырой хвост.
+				if (aiClient && config.summary.enabled) {
 					await maybeUpdateSummary(aiClient, repos.messages, repos.settings, chatId, threadId, config, logger);
 				}
 
@@ -169,7 +171,7 @@ export function createAiFunPart(): PartDefinition {
 				const kind: AiUsageKind = isTriggered ? "trigger" : "gacha";
 				const botName = displayName(ctx.botInfo) ?? "бот";
 				const context = await buildChatContext(repos.messages, chatId, threadId, config, botName);
-				const summary = await getSummary(repos.settings, chatId, threadId);
+				const summary = config.summary.enabled ? await getSummary(repos.settings, chatId, threadId) : null;
 
 				// Раньше триггер по имени получал только голую инструкцию "тебе
 				// написали, ответь" — без сценария на выбор, в отличие от гачи
