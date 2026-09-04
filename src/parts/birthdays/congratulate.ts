@@ -9,9 +9,12 @@ import { loadAiConfig } from "../ai-fun/config.ts";
 import { apiKeyEnvVar, type ProviderId } from "../ai-fun/providers.ts";
 import { loadBirthdaysConfig } from "./config.ts";
 
-export const CONGRATS_CHECK_INTERVAL_MS = 60 * 60 * 1000; // проверяем раз в час — достаточно точно попасть в день, дёшево
+export const CONGRATS_CHECK_INTERVAL_MS = 60 * 60 * 1000; // проверяем раз в час — этого достаточно, чтобы не проскочить нужный час
 const PART_ID = "birthdays";
 const SENT_LOG_KEY = "congratsSentOn"; // { [tgId]: "YYYY-MM-DD" } — защита от повторного поздравления при перезапуске в тот же день
+// По прямому требованию — поздравление должно уходить примерно в 12 дня по
+// Москве, а не в случайный момент часа, когда просто совпал тик крона.
+const CONGRATS_HOUR_MOSCOW = 12;
 
 const API_KEYS: Record<ProviderId, string> = {
 	deepseek: appConfig.DEEPSEEK_API_KEY,
@@ -24,30 +27,36 @@ const GENDER_LABEL: Record<NonNullable<Gender> | "unknown", string> = {
 	unknown: "неизвестен",
 };
 
-/** "ДД.ММ" и "YYYY-MM-DD" в московском времени — время сервера (VPS) не обязательно совпадает с часовым поясом чата. */
-function todayInMoscow(): { dayMonth: string; isoDate: string } {
+/** "ДД.ММ", "YYYY-MM-DD" и текущий час в московском времени — время сервера (VPS) не обязательно совпадает с часовым поясом чата. */
+function nowInMoscow(): { dayMonth: string; isoDate: string; hour: number } {
 	const parts = new Intl.DateTimeFormat("en-CA", {
 		timeZone: "Europe/Moscow",
 		year: "numeric",
 		month: "2-digit",
 		day: "2-digit",
+		hour: "2-digit",
+		hour12: false,
 	}).formatToParts(new Date());
 	const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
 	const year = get("year");
 	const month = get("month");
 	const day = get("day");
-	return { dayMonth: `${day}.${month}`, isoDate: `${year}-${month}-${day}` };
+	// "24" вместо "00" в некоторых Intl-реализациях в полночь — нормализуем.
+	const hour = Number(get("hour")) % 24;
+	return { dayMonth: `${day}.${month}`, isoDate: `${year}-${month}-${day}`, hour };
 }
 
 /**
  * Раз в час (см. CONGRATS_CHECK_INTERVAL_MS) проверяет, у кого сегодня день
  * рождения (по московскому времени), и шлёт AI-сгенерированное поздравление
- * в чат/тему, где человека видели активным последний раз (см.
- * birthdays-repository.ts / scan.ts). Промпт поздравления — BirthdaysConfig,
+ * в общий чат — но только в час CONGRATS_HOUR_MOSCOW (12 дня), не в любой
+ * случайный тик почасового крона. Промпт поздравления — BirthdaysConfig,
  * редактируется в панели.
  */
 export async function runBirthdayCongratulations(repos: Repositories, telegram: Telegram, logger: Logger): Promise<void> {
-	const { dayMonth, isoDate } = todayInMoscow();
+	const { dayMonth, isoDate, hour } = nowInMoscow();
+	if (hour !== CONGRATS_HOUR_MOSCOW) return;
+
 	const birthdays = await repos.birthdays.findByBirthdayDay(dayMonth);
 	if (birthdays.length === 0) return;
 
