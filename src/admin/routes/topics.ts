@@ -6,7 +6,6 @@ import type { TopicsRepository } from "../../db/repositories/topics-repository.t
 import { loadAiConfig } from "../../parts/ai-fun/config.ts";
 import { cooldownRemainingMinutes } from "../../parts/ai-fun/cooldown.ts";
 import { peekGachaCounter, setGachaCounter } from "../../parts/ai-fun/gacha.ts";
-import { getSummary } from "../../parts/ai-fun/summary.ts";
 
 /**
  * "Подчаты" — чаты и темы внутри них (форум-топики), пассивно
@@ -19,15 +18,6 @@ export function createTopicsRouter(chats: ChatsRepository, topics: TopicsReposit
 
 	router.get("/", async (_req, res) => {
 		const [allChats, allTopics, aiConfig] = await Promise.all([chats.listAll(), topics.listAll(), loadAiConfig(settings)]);
-
-		// Сводка и счётчик гачи — только для тем с включёнными AI-шутками,
-		// остальным они всё равно не собираются/не крутятся. summary.enabled
-		// временно выключен целиком (см. SummaryConfig.enabled) — если так,
-		// не читаем БД вообще, чтобы в панели не показывать замороженную
-		// старую сводку как будто она живая.
-		const aiTopics = aiConfig.summary.enabled ? allTopics.filter((t) => t.aiJokesEnabled) : [];
-		const summaries = await Promise.all(aiTopics.map(async (t) => [`${t.chatId}:${t.threadId}`, await getSummary(settings, t.chatId, t.threadId)] as const));
-		const summaryByKey = new Map(summaries);
 
 		// Гача — вероятностная и может сработать раньше guaranteedAt (см.
 		// gacha.ts) — счётчик тут это "не позже чем через", а не точный таймер.
@@ -67,7 +57,6 @@ export function createTopicsRouter(chats: ChatsRepository, topics: TopicsReposit
 				...chat,
 				topics: (topicsByChat.get(chat.chatId) ?? []).map((t) => ({
 					...t,
-					summary: summaryByKey.get(`${t.chatId}:${t.threadId}`) ?? null,
 					gachaCounter: t.aiJokesEnabled ? gachaCounter : null,
 					gachaGuaranteedAt: aiConfig.gachaGuaranteedAt,
 				})),

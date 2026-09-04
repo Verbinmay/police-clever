@@ -65,7 +65,7 @@ async function loadTopics() {
 	tbody.innerHTML = "";
 	for (const chat of chats) {
 		if (chat.topics.length === 0) {
-			tbody.appendChild(topicRow(chat, { threadId: "0", topicName: null, aiJokesEnabled: false, muteVoteEnabled: false, yesNoEnabled: false, summary: null }, true));
+			tbody.appendChild(topicRow(chat, { threadId: "0", topicName: null, aiJokesEnabled: false, muteVoteEnabled: false, yesNoEnabled: false }, true));
 			continue;
 		}
 		for (const topic of chat.topics) {
@@ -84,7 +84,6 @@ function topicRow(chat, topic, empty) {
 		<td></td>
 		<td></td>
 		<td></td>
-		<td class="wrap"></td>
 		<td></td>
 		<td></td>
 		<td></td>
@@ -96,20 +95,19 @@ function topicRow(chat, topic, empty) {
 	tr.children[3].appendChild(toggleSwitch(topic.aiJokesEnabled, (checked) => setTopicToggle(chat.chatId, topic.threadId, { aiJokesEnabled: checked })));
 	tr.children[4].appendChild(toggleSwitch(topic.yesNoEnabled, (checked) => setTopicToggle(chat.chatId, topic.threadId, { yesNoEnabled: checked })));
 	tr.children[5].appendChild(toggleSwitch(topic.muteVoteEnabled, (checked) => setTopicToggle(chat.chatId, topic.threadId, { muteVoteEnabled: checked })));
-	tr.children[6].textContent = topic.summary ?? (topic.aiJokesEnabled ? "(ещё не собрана)" : "—");
 	// Гача вероятностная (см. gacha.ts) — счётчик это "гарантированно не
 	// позже чем через N", реально может сработать и раньше. Значение
 	// редактируемое — можно подвинуть ближе к гарантии (ответит скорее)
 	// или отодвинуть (ответит позже), не дожидаясь реальных сообщений.
 	if (topic.aiJokesEnabled) {
-		tr.children[7].appendChild(gachaCounterEditor(topic.gachaCounter, topic.gachaGuaranteedAt));
+		tr.children[6].appendChild(gachaCounterEditor(topic.gachaCounter, topic.gachaGuaranteedAt));
 	} else {
-		tr.children[7].textContent = "—";
+		tr.children[6].textContent = "—";
 	}
 	// Кулдаун и дневной кап — счётчики на весь ЧАТ (не на тему, см. cooldown.ts),
 	// поэтому одинаковы во всех строках тем одного чата.
-	tr.children[8].textContent = chat.cooldownRemainingMin > 0 ? `ещё ${chat.cooldownRemainingMin} мин` : "—";
-	tr.children[9].textContent = chat.dailyCapRemainingMin > 0 ? `ещё ${chat.dailyCapRemainingMin} мин` : "—";
+	tr.children[7].textContent = chat.cooldownRemainingMin > 0 ? `ещё ${chat.cooldownRemainingMin} мин` : "—";
+	tr.children[8].textContent = chat.dailyCapRemainingMin > 0 ? `ещё ${chat.dailyCapRemainingMin} мин` : "—";
 	return tr;
 }
 
@@ -195,13 +193,6 @@ async function loadAiConfig() {
 	el("ai-sticker-pack").value = config.stickerPackShortName;
 	el("ai-sticker-cooldown").value = config.stickerCooldownMinutes;
 
-	el("ai-summary-enabled").checked = config.summary.enabled;
-	el("ai-summary-every").value = config.summary.everyNMessages;
-	el("ai-summary-lookback").value = config.summary.lookbackMessages;
-	el("ai-summary-maxchars").value = config.summary.maxChars;
-	el("ai-summary-maxtokens").value = config.summary.maxTokens;
-	el("ai-summary-cumulative").checked = config.summary.cumulative;
-
 	el("tone-general").value = config.toneWeights.general;
 	el("tone-targeted").value = config.toneWeights.targeted;
 	el("tone-sarcasm").value = config.toneWeights.sarcasm;
@@ -255,15 +246,6 @@ el("ai-config-save").addEventListener("click", async () => {
 				stickerPackShortName: el("ai-sticker-pack").value.trim(),
 				stickerCooldownMinutes: Number(el("ai-sticker-cooldown").value),
 				activeParticipantsLookback: Number(el("ai-participants-window").value),
-
-				summary: {
-					enabled: el("ai-summary-enabled").checked,
-					everyNMessages: Number(el("ai-summary-every").value),
-					lookbackMessages: Number(el("ai-summary-lookback").value),
-					maxChars: Number(el("ai-summary-maxchars").value),
-					maxTokens: Number(el("ai-summary-maxtokens").value),
-					cumulative: el("ai-summary-cumulative").checked,
-				},
 
 				toneWeights: {
 					general: Number(el("tone-general").value),

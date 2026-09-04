@@ -15,7 +15,6 @@ import type { AiConfig } from "./default-config.ts";
 import { apiKeyEnvVar, type ProviderId } from "./providers.ts";
 import { resetGachaCounter, rollGacha } from "./gacha.ts";
 import { getRandomStickerFileId } from "./stickers.ts";
-import { getSummary, maybeUpdateSummary } from "./summary.ts";
 import { pickAction } from "./tone.ts";
 
 function toThreadIdParam(threadId: string): number | undefined {
@@ -51,11 +50,16 @@ const API_KEYS: Record<ProviderId, string> = {
  *    включённый чат по сути размножали общую частоту срабатываний
  *    пропорционально числу чатов (те же 5 тем — 5 параллельных гонок к
  *    порогу). Единый розыгрыш честнее и предсказуемее по частоте.
- *  - Роллинг-саммари (summary.ts) — НА ТЕМУ. Это про "память"/атмосферу
- *    конкретного разговора, а не про частоту ответов — разные темы
- *    одного чата не должны путать контекст друг друга.
  *  - Глобальный месячный $ потолок (budget.ts) — НА ВЕСЬ БОТ, все чаты
  *    вместе.
+ *
+ * Роллинг-саммари темы (был отдельный periodic-вызов, обновлял короткую
+ * сводку раз в N сообщений) — вырезан целиком. На практике сводка чаще
+ * вредила, чем помогала: ставилась первой в userContent, звучала как
+ * авторитетная рамка, а обновлялась реже, чем менялась реальная тема
+ * разговора — ответы держались за устаревшую тему из сводки, хотя сырой
+ * хвост сообщений уже давно ушёл дальше. Сейчас единственный источник
+ * контекста — сырой хвост сообщений (buildChatContext, dialog.ts).
  *
  * Когда лимит исчерпан, но позвали ПО ИМЕНИ (не гачей) — вместо тишины
  * отправляется случайный стикер из заранее заданного стикерпака
@@ -130,15 +134,6 @@ export function createAiFunPart(): PartDefinition {
 
 				const aiClient = getClient(config, config.provider);
 
-				// Обслуживание саммари (на тему) не зависит от того, сработает ли
-				// шутка на этом конкретном сообщении — считает объём независимо.
-				// Без живого клиента (ключ не задан) просто пропускаем. config.summary.enabled —
-				// временно выключено целиком (см. doc-комментарий у SummaryConfig.enabled):
-				// сводка залипала на устаревшей теме сильнее, чем сырой хвост.
-				if (aiClient && config.summary.enabled) {
-					await maybeUpdateSummary(aiClient, repos.messages, repos.settings, chatId, threadId, config, logger);
-				}
-
 				// Регистронезависимо — "Реван"/"реван"/"РЕВАН" все должны срабатывать одинаково.
 				const lowerText = text.toLowerCase();
 				const isTriggered = config.triggerWords.some((word) => word && lowerText.includes(word.toLowerCase()));
@@ -171,7 +166,6 @@ export function createAiFunPart(): PartDefinition {
 				const kind: AiUsageKind = isTriggered ? "trigger" : "gacha";
 				const botName = displayName(ctx.botInfo) ?? "бот";
 				const context = await buildChatContext(repos.messages, chatId, threadId, config, botName);
-				const summary = config.summary.enabled ? await getSummary(repos.settings, chatId, threadId) : null;
 
 				// Раньше триггер по имени получал только голую инструкцию "тебе
 				// написали, ответь" — без сценария на выбор, в отличие от гачи
@@ -187,7 +181,7 @@ export function createAiFunPart(): PartDefinition {
 				// раздваивался (по существу — про позвавшего, шутка сценария —
 				// про кого-то третьего). См. tone.ts.
 				const addressorName = isTriggered ? (displayName(ctx.from) ?? undefined) : undefined;
-				const picked = pickAction(config, context.activeParticipants, addressorName);
+				const picked = await pickAction(repos.settings, config, context.activeParticipants, addressorName);
 
 				// Если триггер-сообщение — реплай, само по себе оно часто
 				// бессмысленно без цитаты ("а он тебе на это что скажет?") — без
@@ -220,7 +214,7 @@ export function createAiFunPart(): PartDefinition {
 						: `Тебя просто позвали по имени без повода — ответь в характере, как будто тебя дёрнули без дела. ${picked.action}`
 					: picked.action;
 				const prompt = buildSystemPrompt(config, action);
-				const userContent = buildUserContent(context, summary);
+				const userContent = buildUserContent(context);
 
 				const reply = await aiClient.getReply(prompt, userContent, logger, config.maxTokens);
 				if (!reply) {

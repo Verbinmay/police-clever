@@ -1,4 +1,7 @@
+import type { SettingsRepository } from "../../db/repositories/settings-repository.ts";
 import type { AiConfig, Tone } from "./default-config.ts";
+
+const PART_ID = "ai";
 
 function pickRandom<T>(items: T[]): T | undefined {
 	if (items.length === 0) return undefined;
@@ -17,6 +20,46 @@ function pickTone(weights: Record<Tone, number>): Tone {
 		if (roll <= 0) return tone;
 	}
 	return "general";
+}
+
+function usageKey(tone: Tone): string {
+	return `scenarioUsage:${tone}`;
+}
+
+/**
+ * Раньше сценарий внутри тона выбирался чистым random — на практике это
+ * давало заметные "везучие" повторы одного и того же сценария подряд
+ * (обычный эффект равномерного распределения на короткой дистанции, не
+ * баг, но выглядело как баг). Теперь — персистентный счётчик
+ * использований на каждый сценарий (ключ: сам текст сценария; тон
+ * держит свои сценарии в отдельном ключе). Выбор — случайный, но ТОЛЬКО
+ * среди сценариев с минимальным счётчиком в своём тоне: после каждого
+ * прохода все сценарии тона сравняются по счётчику, разброс использований
+ * внутри тона никогда не превышает 1. Это shuffle-bag, а не чистый
+ * random — специально жертвуем "естественной" случайностью ради
+ * равномерности, которую и просили.
+ *
+ * Ключ — сам текст сценария, не индекс: сценарии редактируются в коде
+ * между сессиями, при правке формулировки счётчик этого конкретного
+ * варианта просто начинается заново — это ожидаемо, не баг.
+ */
+async function pickLeastUsedScenario(settings: SettingsRepository, tone: Tone, list: string[]): Promise<string | undefined> {
+	if (list.length === 0) return undefined;
+
+	const usage = await settings.get<Record<string, number>>(PART_ID, usageKey(tone), {});
+	let minCount = Infinity;
+	for (const scenario of list) {
+		const count = usage[scenario] ?? 0;
+		if (count < minCount) minCount = count;
+	}
+
+	const candidates = list.filter((scenario) => (usage[scenario] ?? 0) === minCount);
+	const picked = pickRandom(candidates);
+	if (!picked) return undefined;
+
+	usage[picked] = (usage[picked] ?? 0) + 1;
+	await settings.set(PART_ID, usageKey(tone), usage);
+	return picked;
 }
 
 export interface PickedAction {
@@ -38,7 +81,7 @@ export interface PickedAction {
  * подставляем именно позвавшего, 30% оставляем случайность (чтобы не
  * потерять элемент "непонятно, на кого прилетит").
  */
-export function pickAction(config: AiConfig, activeParticipants: string[], preferredTarget?: string): PickedAction {
+export async function pickAction(settings: SettingsRepository, config: AiConfig, activeParticipants: string[], preferredTarget?: string): Promise<PickedAction> {
 	let tone = pickTone(config.toneWeights);
 
 	if (tone !== "general" && activeParticipants.length === 0) {
@@ -46,7 +89,7 @@ export function pickAction(config: AiConfig, activeParticipants: string[], prefe
 	}
 
 	const list = config.actionsByTone[tone];
-	const template = pickRandom(list) ?? pickRandom(config.actionsByTone.general) ?? "Пошути на тему разговора";
+	const template = (await pickLeastUsedScenario(settings, tone, list)) ?? (await pickLeastUsedScenario(settings, "general", config.actionsByTone.general)) ?? "Пошути на тему разговора";
 
 	if (!template.includes("{target}")) {
 		return { tone, action: template };
@@ -55,7 +98,7 @@ export function pickAction(config: AiConfig, activeParticipants: string[], prefe
 	const target = preferredTarget && Math.random() < 0.7 ? preferredTarget : pickRandom(activeParticipants);
 	if (!target) {
 		// Не должно случиться (проверили выше), но на всякий случай не шлём "{target}" в промпт как есть.
-		const fallback = pickRandom(config.actionsByTone.general) ?? "Пошути на тему разговора";
+		const fallback = (await pickLeastUsedScenario(settings, "general", config.actionsByTone.general)) ?? "Пошути на тему разговора";
 		return { tone: "general", action: fallback };
 	}
 

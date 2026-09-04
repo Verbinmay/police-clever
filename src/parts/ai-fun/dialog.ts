@@ -51,10 +51,9 @@ export function buildSystemPrompt(config: AiConfig, action: string): string {
 	return config.promptTemplate.replace("{action}", action);
 }
 
-/** Собирает финальный текст, который уходит в поле "user" запроса — саммари (если есть) + список активных + сырой хвост диалога. */
-export function buildUserContent(context: ChatContext, summary: string | null): string {
+/** Собирает финальный текст, который уходит в поле "user" запроса — список активных + сырой хвост диалога. */
+export function buildUserContent(context: ChatContext): string {
 	const parts: string[] = [];
-	if (summary) parts.push(`Сводка недавней беседы: ${summary}`);
 	if (context.activeParticipants.length > 0) parts.push(`Сейчас в чате пишут: ${context.activeParticipants.join(", ")}`);
 	parts.push(context.dialogText || "(сообщений пока нет)");
 	return parts.join("\n\n");
