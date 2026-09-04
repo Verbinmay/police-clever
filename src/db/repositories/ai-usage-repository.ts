@@ -6,7 +6,6 @@ export interface RecordAiUsageInput {
 	chatId: string;
 	threadId: string;
 	kind: AiUsageKind;
-	tone: string | null;
 	provider: string;
 	promptText: string;
 	userContent: string;

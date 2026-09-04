@@ -132,34 +132,17 @@
 				</div>
 
 				<div class="card">
-					<h3>Тон шутки — веса категорий (пассивная гача)</h3>
-					<p class="hint">Относительные веса, не обязаны суммироваться в 100 — нормализуются на лету. Targeted/sarcasm/praise подставляют случайного "активного" участника вместо {target} в сценарии.</p>
-					<div class="form-row inline"><label>general</label><input type="number" id="tone-general" min="0" /></div>
-					<div class="form-row inline"><label>targeted</label><input type="number" id="tone-targeted" min="0" /></div>
-					<div class="form-row inline"><label>sarcasm</label><input type="number" id="tone-sarcasm" min="0" /></div>
-					<div class="form-row inline"><label>praise</label><input type="number" id="tone-praise" min="0" /></div>
-
+					<h3>Сценарии (пассивная гача)</h3>
+					<p class="hint">Один общий пул — каждый вызов случайно выбирает сценарий среди наименее использованных (без деления на категории/тона). Можно использовать плейсхолдер {target} — тогда подставляется случайный "активный" участник (или тот, кто позвал бота по имени).</p>
 					<div class="form-row">
-						<label>Сценарии — general (по одному на строку)</label>
-						<textarea id="actions-general"></textarea>
-					</div>
-					<div class="form-row">
-						<label>Сценарии — targeted, можно использовать {target} (по одному на строку)</label>
-						<textarea id="actions-targeted"></textarea>
-					</div>
-					<div class="form-row">
-						<label>Сценарии — sarcasm, можно использовать {target} (по одному на строку)</label>
-						<textarea id="actions-sarcasm"></textarea>
-					</div>
-					<div class="form-row">
-						<label>Сценарии — praise, можно использовать {target} (по одному на строку)</label>
-						<textarea id="actions-praise"></textarea>
+						<label>Сценарии (по одному на строку)</label>
+						<textarea id="actions" style="min-height: 320px;"></textarea>
 					</div>
 				</div>
 
 				<div class="card">
 					<h3>Использование сценариев</h3>
-					<p class="hint">Сколько раз реально выпадал каждый сценарий (см. tone.ts — shuffle-bag по минимальному счётчику внутри тона: разброс использований внутри одного тона никогда не превышает 1). Для контроля, что распределение честное, а не только "по задумке".</p>
+					<p class="hint">Сколько раз реально выпадал каждый сценарий (см. scenario.ts — shuffle-bag по минимальному счётчику: разброс использований никогда не превышает 1). Для контроля, что распределение честное, а не только "по задумке".</p>
 					<div id="scenario-usage-content"></div>
 				</div>
 
@@ -226,7 +209,7 @@
 				</div>
 				<div class="table-wrap">
 				<table id="ai-replies-table">
-					<thead><tr><th>Время</th><th>Чат</th><th>Тема</th><th>Тип</th><th>Тон</th><th>Ответ</th><th>$</th></tr></thead>
+					<thead><tr><th>Время</th><th>Чат</th><th>Тема</th><th>Тип</th><th>Ответ</th><th>$</th></tr></thead>
 					<tbody></tbody>
 				</table>
 				</div>

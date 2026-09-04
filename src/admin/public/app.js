@@ -255,14 +255,7 @@ async function loadAiConfig() {
 	el("ai-sticker-pack").value = config.stickerPackShortName;
 	el("ai-sticker-cooldown").value = config.stickerCooldownMinutes;
 
-	el("tone-general").value = config.toneWeights.general;
-	el("tone-targeted").value = config.toneWeights.targeted;
-	el("tone-sarcasm").value = config.toneWeights.sarcasm;
-	el("tone-praise").value = config.toneWeights.praise;
-	el("actions-general").value = config.actionsByTone.general.join("\n");
-	el("actions-targeted").value = config.actionsByTone.targeted.join("\n");
-	el("actions-sarcasm").value = config.actionsByTone.sarcasm.join("\n");
-	el("actions-praise").value = config.actionsByTone.praise.join("\n");
+	el("actions").value = config.actions.join("\n");
 
 	el("ai-guaranteed").value = config.gachaGuaranteedAt;
 	el("ai-yesno-prob").value = config.yesNoReplyProbability;
@@ -272,36 +265,19 @@ async function loadAiConfig() {
 	loadScenarioUsage();
 }
 
-// Небольшие таблички "сценарий → сколько раз выпал" по каждому тону —
-// контроль, что shuffle-bag (tone.ts) реально держит разброс использований
-// внутри тона не больше 1, а не просто "по задумке".
-const TONE_LABELS = { general: "general", targeted: "targeted", sarcasm: "sarcasm", praise: "praise" };
-
+// Небольшая табличка "сценарий → сколько раз выпал" по общему пулу —
+// контроль, что shuffle-bag (scenario.ts) реально держит разброс
+// использований не больше 1, а не просто "по задумке".
 async function loadScenarioUsage() {
-	const usage = await api("/scenario-usage");
-	const container = el("scenario-usage-content");
-	container.innerHTML = "";
-
-	for (const [tone, label] of Object.entries(TONE_LABELS)) {
-		const rows = usage[tone] ?? [];
-		if (rows.length === 0) continue;
-
-		const h4 = document.createElement("h4");
-		h4.textContent = label;
-		h4.style.marginBottom = "4px";
-		container.appendChild(h4);
-
-		const section = document.createElement("div");
-		container.appendChild(section);
-		renderSimpleTable(
-			section,
-			[
-				{ label: "Сценарий", className: "wrap" },
-				{ label: "Раз выпал", className: "num" },
-			],
-			rows.map((r) => [escapeHtml(r.scenario), r.count]),
-		);
-	}
+	const rows = await api("/scenario-usage");
+	renderSimpleTable(
+		el("scenario-usage-content"),
+		[
+			{ label: "Сценарий", className: "wrap" },
+			{ label: "Раз выпал", className: "num" },
+		],
+		rows.map((r) => [escapeHtml(r.scenario), r.count]),
+	);
 }
 
 el("ai-config-save").addEventListener("click", async () => {
@@ -339,18 +315,7 @@ el("ai-config-save").addEventListener("click", async () => {
 				stickerCooldownMinutes: Number(el("ai-sticker-cooldown").value),
 				activeParticipantsLookback: Number(el("ai-participants-window").value),
 
-				toneWeights: {
-					general: Number(el("tone-general").value),
-					targeted: Number(el("tone-targeted").value),
-					sarcasm: Number(el("tone-sarcasm").value),
-					praise: Number(el("tone-praise").value),
-				},
-				actionsByTone: {
-					general: linesOf("actions-general"),
-					targeted: linesOf("actions-targeted"),
-					sarcasm: linesOf("actions-sarcasm"),
-					praise: linesOf("actions-praise"),
-				},
+				actions: linesOf("actions"),
 
 				gachaGuaranteedAt: Number(el("ai-guaranteed").value),
 				yesNoReplyProbability: Number(el("ai-yesno-prob").value),
@@ -448,7 +413,6 @@ async function loadAiReplies() {
 			<td>${r.chatId}</td>
 			<td>${r.threadId}</td>
 			<td>${r.kind}</td>
-			<td>${r.tone ?? "—"}</td>
 			<td class="wrap">${escapeHtml(r.replyText)}</td>
 			<td>${formatUsd(r.costUsd)}</td>
 		`;
@@ -456,7 +420,7 @@ async function loadAiReplies() {
 		const detailRow = document.createElement("tr");
 		detailRow.hidden = true;
 		const detailCell = document.createElement("td");
-		detailCell.colSpan = 7;
+		detailCell.colSpan = 6;
 		detailCell.className = "wrap";
 		detailCell.innerHTML = `
 			<p><strong>Промпт (system):</strong><br>${escapeHtml(r.promptText)}</p>

@@ -24,7 +24,7 @@ export async function buildChatContext(messages: MessagesRepository, chatId: str
 	// botName исключаем из "активных участников" — это имя, под которым бот
 	// сам сохраняет свои реплики (см. ai-fun/index.ts), не реальный человек.
 	// Без исключения бот мог бы выбрать сам себя целью для targeted/sarcasm
-	// шутки ({target} подставляется случайным активным участником, tone.ts).
+	// шутки ({target} подставляется случайным активным участником, scenario.ts).
 	const participantsWindow = rows.slice(-config.activeParticipantsLookback);
 	const activeParticipants: string[] = [];
 	for (let i = participantsWindow.length - 1; i >= 0; i--) {
@@ -46,7 +46,7 @@ export async function buildChatContext(messages: MessagesRepository, chatId: str
 	return { dialogText: lines.join("\n"), activeParticipants };
 }
 
-/** Порт `createPromt` из старого `ai.service.ts`, теперь принимает уже выбранный текст сценария (см. tone.ts). */
+/** Порт `createPromt` из старого `ai.service.ts`, теперь принимает уже выбранный текст сценария (см. scenario.ts). */
 export function buildSystemPrompt(config: AiConfig, action: string): string {
 	return config.promptTemplate.replace("{action}", action);
 }

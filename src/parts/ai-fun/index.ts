@@ -14,8 +14,8 @@ import { buildChatContext, buildSystemPrompt, buildUserContent } from "./dialog.
 import type { AiConfig } from "./default-config.ts";
 import { apiKeyEnvVar, type ProviderId } from "./providers.ts";
 import { resetGachaCounter, rollGacha } from "./gacha.ts";
+import { pickAction } from "./scenario.ts";
 import { getRandomStickerFileId } from "./stickers.ts";
-import { pickAction } from "./tone.ts";
 
 function toThreadIdParam(threadId: string): number | undefined {
 	return threadId === "0" ? undefined : Number(threadId);
@@ -33,9 +33,10 @@ const API_KEYS: Record<ProviderId, string> = {
 
 /**
  * AI-шутки: бот следит за разговором и иногда встревает — по имени (любое
- * из нескольких триггер-слов, безусловно) или сам (пассивная "гача"), с
- * одним из четырёх настроений (general/targeted/sarcasm/praise, см.
- * tone.ts) — плюс лёгкий бесплатный флейвор на "да"/"нет" (свой тумблер,
+ * из нескольких триггер-слов, безусловно) или сам (пассивная "гача"), со
+ * сценарием из общего пула (см. scenario.ts — раньше пул был разбит на
+ * категории тона со своими весами, по прямому требованию тоны убраны
+ * целиком) — плюс лёгкий бесплатный флейвор на "да"/"нет" (свой тумблер,
  * не расходует AI-бюджет, работает независимо от AI-шуток).
  *
  * Что общее, а что на ТЕМУ — сознательно по-разному:
@@ -179,7 +180,7 @@ export function createAiFunPart(): PartDefinition {
 				// preferredTarget — тот, кто позвал бота: без этого {target}
 				// сценария выбирался случайно из последних 20 активных, и ответ
 				// раздваивался (по существу — про позвавшего, шутка сценария —
-				// про кого-то третьего). См. tone.ts.
+				// про кого-то третьего). См. scenario.ts.
 				const addressorName = isTriggered ? (displayName(ctx.from) ?? undefined) : undefined;
 				const picked = await pickAction(repos.settings, config, context.activeParticipants, addressorName);
 
@@ -247,7 +248,6 @@ export function createAiFunPart(): PartDefinition {
 					chatId,
 					threadId,
 					kind,
-					tone: picked?.tone ?? null,
 					provider: config.provider,
 					promptText: prompt,
 					userContent,
