@@ -1,6 +1,7 @@
 import { DataSource } from "typeorm";
 import { AdminAccountSchema } from "./entities/AdminAccount.ts";
 import { AiUsageSchema } from "./entities/AiUsage.ts";
+import { BirthdaySchema } from "./entities/Birthday.ts";
 import { BotUserSchema } from "./entities/BotUser.ts";
 import { ChatSchema } from "./entities/Chat.ts";
 import { MessageSchema } from "./entities/Message.ts";
@@ -21,6 +22,7 @@ const ENTITIES = [
 	AiUsageSchema,
 	PartLogSchema,
 	PartSettingSchema,
+	BirthdaySchema,
 ];
 
 /**

@@ -70,11 +70,17 @@ export function createTopicsRouter(chats: ChatsRepository, topics: TopicsReposit
 			res.status(400).json({ error: "chatId/threadId обязательны" });
 			return;
 		}
-		const { aiJokesEnabled, muteVoteEnabled, yesNoEnabled } = req.body as { aiJokesEnabled?: boolean; muteVoteEnabled?: boolean; yesNoEnabled?: boolean };
-		const patch: Partial<{ aiJokesEnabled: boolean; muteVoteEnabled: boolean; yesNoEnabled: boolean }> = {};
+		const { aiJokesEnabled, muteVoteEnabled, yesNoEnabled, birthdaysEnabled } = req.body as {
+			aiJokesEnabled?: boolean;
+			muteVoteEnabled?: boolean;
+			yesNoEnabled?: boolean;
+			birthdaysEnabled?: boolean;
+		};
+		const patch: Partial<{ aiJokesEnabled: boolean; muteVoteEnabled: boolean; yesNoEnabled: boolean; birthdaysEnabled: boolean }> = {};
 		if (typeof aiJokesEnabled === "boolean") patch.aiJokesEnabled = aiJokesEnabled;
 		if (typeof muteVoteEnabled === "boolean") patch.muteVoteEnabled = muteVoteEnabled;
 		if (typeof yesNoEnabled === "boolean") patch.yesNoEnabled = yesNoEnabled;
+		if (typeof birthdaysEnabled === "boolean") patch.birthdaysEnabled = birthdaysEnabled;
 
 		const updated = await topics.setToggles(chatId, threadId, patch);
 		if (!updated) {

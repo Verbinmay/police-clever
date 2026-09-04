@@ -36,6 +36,7 @@ export class TopicsRepository {
 				aiJokesEnabled: false,
 				muteVoteEnabled: false,
 				yesNoEnabled: false,
+				birthdaysEnabled: false,
 			}),
 		);
 	}
@@ -48,7 +49,7 @@ export class TopicsRepository {
 		return this.repo.find({ order: { updatedAt: "DESC" } });
 	}
 
-	async setToggles(chatId: string, threadId: string, patch: Partial<Pick<Topic, "aiJokesEnabled" | "muteVoteEnabled" | "yesNoEnabled">>): Promise<Topic | null> {
+	async setToggles(chatId: string, threadId: string, patch: Partial<Pick<Topic, "aiJokesEnabled" | "muteVoteEnabled" | "yesNoEnabled" | "birthdaysEnabled">>): Promise<Topic | null> {
 		const existing = await this.repo.findOneBy({ chatId, threadId });
 		if (!existing) return null;
 		Object.assign(existing, patch);

@@ -54,7 +54,7 @@ export function createCorePart(): PartDefinition {
 				await repos.users.touch({ tgId: String(from.id), username: from.username ?? null, firstName: from.first_name ?? null });
 
 				const text = ctx.message && "text" in ctx.message ? ctx.message.text : undefined;
-				if (text && (topic.aiJokesEnabled || topic.muteVoteEnabled)) {
+				if (text && (topic.aiJokesEnabled || topic.muteVoteEnabled || topic.birthdaysEnabled)) {
 					await repos.messages.save({ chatId, threadId, tgId: String(from.id), fromName: displayName(from), text });
 				}
 

@@ -1,6 +1,6 @@
 import { EntitySchema } from "typeorm";
 
-export type AiUsageKind = "trigger" | "gacha";
+export type AiUsageKind = "trigger" | "gacha" | "birthday-scan" | "birthday-congrats";
 
 /**
  * Один вызов AI (шутка по триггер-слову или пассивная гача) — под

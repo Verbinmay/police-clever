@@ -22,7 +22,8 @@ function pickTone(weights: Record<Tone, number>): Tone {
 	return "general";
 }
 
-function usageKey(tone: Tone): string {
+/** Экспортируется для admin-роута статистики (scenario-usage.ts) — та же формула ключа, без дублирования. */
+export function usageKey(tone: Tone): string {
 	return `scenarioUsage:${tone}`;
 }
 

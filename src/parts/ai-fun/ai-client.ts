@@ -41,7 +41,13 @@ export function createAiClient(provider: ProviderModelConfig, apiKey: string, pr
 	const openai = new OpenAI({ baseURL: provider.baseUrl, apiKey, maxRetries: 4 });
 
 	return {
-		async getReply(systemPrompt: string, dialogText: string, logger: Logger, maxTokens: number = DEFAULT_MAX_TOKENS): Promise<AiReply | null> {
+		/**
+		 * stripQuotes=true (по умолчанию) — вырезает все двойные кавычки из
+		 * ответа, чтобы шутка не оборачивалась в кавычки как цитата. Для
+		 * структурированных JSON-ответов (см. parts/birthdays/scan.ts) это
+		 * ломает парсинг — там передаём false.
+		 */
+		async getReply(systemPrompt: string, dialogText: string, logger: Logger, maxTokens: number = DEFAULT_MAX_TOKENS, options?: { stripQuotes?: boolean }): Promise<AiReply | null> {
 			for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
 				try {
 					const params: Record<string, unknown> = {
@@ -83,8 +89,9 @@ export function createAiClient(provider: ProviderModelConfig, apiKey: string, pr
 						});
 						return null;
 					}
+					const stripQuotes = options?.stripQuotes ?? true;
 					return {
-						text: text.replace(/"/g, ""),
+						text: stripQuotes ? text.replace(/"/g, "") : text,
 						promptTokens: response.usage?.prompt_tokens ?? 0,
 						completionTokens: response.usage?.completion_tokens ?? 0,
 					};
