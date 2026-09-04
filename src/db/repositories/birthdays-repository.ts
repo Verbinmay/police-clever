@@ -12,6 +12,17 @@ export interface AutoScanInput {
 	birthday?: string | null;
 }
 
+export interface AdminUpsertInput {
+	tgId: string;
+	firstName: string;
+	username: string | null;
+	/** Чат, куда пойдёт поздравление — при ручном добавлении выбирается в панели (список чатов с включённым учётом др). */
+	chatId: string;
+	/** undefined — не менять текущее значение (используется при ручной правке одного поля через PUT /:tgId). */
+	gender?: Gender;
+	birthday?: string | null;
+}
+
 export class BirthdaysRepository {
 	constructor(private readonly dataSource: DataSource) {}
 
@@ -29,12 +40,10 @@ export class BirthdaysRepository {
 
 	/**
 	 * Пишет результат автоскана (см. parts/birthdays/scan.ts). Ключевое
-	 * правило по прямому требованию: если день рождения уже проставлен
-	 * админом (`source: "admin"`), автоскан НИКОГДА не трогает поле
-	 * `birthday` — только обновляет имя/юзернейм/чат-тему активности (это
-	 * не "чьё-то решение", это просто актуальные факты профиля). Пол
-	 * автоскан обновляет всегда, если разглядел — это не то поле, которое
-	 * админ вручную защищает по условию задачи.
+	 * правило по прямому требованию: если день рождения или пол уже
+	 * проставлены админом (`source`/`genderSource: "admin"`), автоскан
+	 * НИКОГДА их не трогает — только обновляет имя/юзернейм/чат активности
+	 * (это не "чьё-то решение", это просто актуальные факты профиля).
 	 */
 	async upsertAuto(input: AutoScanInput): Promise<void> {
 		const existing = await this.repo.findOneBy({ tgId: input.tgId });
@@ -46,6 +55,7 @@ export class BirthdaysRepository {
 					firstName: input.firstName,
 					username: input.username,
 					gender: input.gender ?? null,
+					genderSource: input.gender ? "auto" : null,
 					birthday: input.birthday ?? null,
 					source: input.birthday ? "auto" : null,
 					chatId: input.chatId,
@@ -59,7 +69,11 @@ export class BirthdaysRepository {
 		existing.username = input.username;
 		existing.chatId = input.chatId;
 		existing.threadId = input.threadId;
-		if (input.gender !== undefined) existing.gender = input.gender;
+
+		if (existing.genderSource !== "admin" && input.gender !== undefined) {
+			existing.gender = input.gender;
+			if (input.gender) existing.genderSource = "auto";
+		}
 
 		if (existing.source !== "admin" && input.birthday !== undefined) {
 			existing.birthday = input.birthday;
@@ -69,7 +83,57 @@ export class BirthdaysRepository {
 		await this.repo.save(existing);
 	}
 
-	/** Ручная правка в панели — ставит source="admin", после этого автоскан поле birthday больше не трогает. */
+	/**
+	 * Ручное добавление нового человека и/или правка существующего из
+	 * панели — одна функция на обе кнопки ("Добавить" и инлайн-правка пола/
+	 * даты в таблице). gender/birthday — undefined значит "не трогать это
+	 * поле" (используется при точечной правке одного поля через PUT
+	 * /:tgId — см. admin/routes/birthdays.ts), а не "сбросить в null" —
+	 * для явного сброса нужно передать null.
+	 */
+	async upsertAdmin(input: AdminUpsertInput): Promise<Birthday> {
+		const existing = await this.repo.findOneBy({ tgId: input.tgId });
+
+		if (!existing) {
+			return this.repo.save(
+				this.repo.create({
+					tgId: input.tgId,
+					firstName: input.firstName,
+					username: input.username,
+					chatId: input.chatId,
+					threadId: "0",
+					gender: input.gender ?? null,
+					genderSource: input.gender !== undefined ? "admin" : null,
+					birthday: input.birthday ?? null,
+					source: input.birthday !== undefined ? "admin" : null,
+				}),
+			);
+		}
+
+		existing.firstName = input.firstName;
+		existing.username = input.username;
+		existing.chatId = input.chatId;
+		if (input.gender !== undefined) {
+			existing.gender = input.gender;
+			existing.genderSource = input.gender ? "admin" : null;
+		}
+		if (input.birthday !== undefined) {
+			existing.birthday = input.birthday;
+			existing.source = input.birthday ? "admin" : null;
+		}
+		return this.repo.save(existing);
+	}
+
+	/** Точечная ручная правка пола существующей записи — ставит genderSource="admin", после этого автоскан поле gender больше не трогает. */
+	async setAdminGender(tgId: string, gender: Gender): Promise<Birthday | null> {
+		const existing = await this.repo.findOneBy({ tgId });
+		if (!existing) return null;
+		existing.gender = gender;
+		existing.genderSource = gender ? "admin" : null;
+		return this.repo.save(existing);
+	}
+
+	/** Точечная ручная правка даты существующей записи — ставит source="admin", после этого автоскан поле birthday больше не трогает. */
 	async setAdminBirthday(tgId: string, birthday: string | null): Promise<Birthday | null> {
 		const existing = await this.repo.findOneBy({ tgId });
 		if (!existing) return null;

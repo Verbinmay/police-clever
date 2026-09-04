@@ -537,7 +537,6 @@ el("votes-load").addEventListener("click", loadVotes);
 
 // ---- Дни рождения ----
 
-const GENDER_LABELS = { male: "муж", female: "жен", null: "—" };
 const BIRTHDAY_RE = /^\d{2}\.\d{2}$/;
 
 async function loadBirthdaysConfig() {
@@ -557,15 +556,15 @@ el("bday-config-save").addEventListener("click", async () => {
 	}
 });
 
-// Фоновый скан идёт раз в 48ч сам по себе — кнопка нужна только чтобы не
-// ждать этот срок после первого включения тумблера в "Подчаты" (и вообще
-// для проверки, что всё работает). Синхронный запрос — скан обычно один
-// AI-вызов на чат, недолго.
+// Фоновое обновление идёт раз в 48ч само по себе — кнопка нужна только
+// чтобы не ждать этот срок после первого включения тумблера в "Подчаты" (и
+// вообще для проверки, что всё работает). Синхронный запрос — обычно один
+// AI-вызов на чат (по bio участников), недолго.
 el("bday-scan-now").addEventListener("click", async () => {
 	const btn = el("bday-scan-now");
 	const status = el("bday-scan-status");
 	btn.disabled = true;
-	status.textContent = "Сканирую…";
+	status.textContent = "Обновляю…";
 	try {
 		await api("/birthdays/scan", { method: "POST" });
 		status.textContent = "Готово";
@@ -578,8 +577,77 @@ el("bday-scan-now").addEventListener("click", async () => {
 	}
 });
 
+// Список чатов с включённым тумблером "Дни рождения" — источник для выпадающего
+// списка в форме ручного добавления (в какой чат уйдёт поздравление) и для
+// подписи chatId человеческим названием чата в таблице участников.
+async function loadBirthdayChats() {
+	const { chats } = await api("/topics");
+	const enabled = chats.filter((c) => c.birthdaysEnabled);
+
+	const select = el("bday-add-chat");
+	select.innerHTML = "";
+	if (enabled.length === 0) {
+		const opt = document.createElement("option");
+		opt.value = "";
+		opt.textContent = "нет чатов с включённым учётом";
+		select.appendChild(opt);
+	} else {
+		for (const chat of enabled) {
+			const opt = document.createElement("option");
+			opt.value = chat.chatId;
+			opt.textContent = chat.title ?? chat.chatId;
+			select.appendChild(opt);
+		}
+	}
+
+	return new Map(chats.map((c) => [c.chatId, c.title ?? c.chatId]));
+}
+
+el("bday-add-form").addEventListener("submit", async (e) => {
+	e.preventDefault();
+	const errorEl = el("bday-add-error");
+	errorEl.textContent = "";
+
+	const chatId = el("bday-add-chat").value;
+	if (!chatId) {
+		errorEl.textContent = "Сначала включите учёт дней рождения хотя бы для одного чата (вкладка Подчаты).";
+		return;
+	}
+
+	try {
+		await api("/birthdays", {
+			method: "POST",
+			body: {
+				tgId: el("bday-add-tgid").value.trim(),
+				firstName: el("bday-add-name").value.trim(),
+				username: el("bday-add-username").value.trim(),
+				chatId,
+				gender: el("bday-add-gender").value || null,
+				birthday: el("bday-add-birthday").value.trim(),
+			},
+		});
+		el("bday-add-form").reset();
+		await loadBirthdays();
+	} catch (err) {
+		errorEl.textContent = err.message;
+	}
+});
+
+function genderSelect(value, onChange) {
+	const select = document.createElement("select");
+	for (const [optValue, label] of [["", "—"], ["male", "муж"], ["female", "жен"]]) {
+		const opt = document.createElement("option");
+		opt.value = optValue;
+		opt.textContent = label;
+		if ((value ?? "") === optValue) opt.selected = true;
+		select.appendChild(opt);
+	}
+	select.addEventListener("change", () => onChange(select.value || null));
+	return select;
+}
+
 async function loadBirthdays() {
-	const people = await api("/birthdays");
+	const [people, chatTitleById] = await Promise.all([api("/birthdays"), loadBirthdayChats()]);
 	const tbody = document.querySelector("#birthdays-table tbody");
 	tbody.innerHTML = "";
 
@@ -590,8 +658,19 @@ async function loadBirthdays() {
 		nameTd.textContent = person.firstName;
 		const usernameTd = document.createElement("td");
 		usernameTd.textContent = person.username ? `@${person.username}` : "—";
+
 		const genderTd = document.createElement("td");
-		genderTd.textContent = GENDER_LABELS[person.gender ?? "null"] ?? "—";
+		genderTd.appendChild(
+			genderSelect(person.gender, async (value) => {
+				try {
+					await api(`/birthdays/${person.tgId}`, { method: "PUT", body: { gender: value } });
+					loadBirthdays();
+				} catch (err) {
+					alert(`Не удалось сохранить пол: ${err.message}`);
+					loadBirthdays();
+				}
+			}),
+		);
 
 		const birthdayTd = document.createElement("td");
 		const input = document.createElement("input");
@@ -616,13 +695,14 @@ async function loadBirthdays() {
 		});
 		birthdayTd.appendChild(input);
 
+		const sourceLabel = (value) => (value === "admin" ? "вручную" : value === "auto" ? "автоскан" : "—");
 		const sourceTd = document.createElement("td");
 		sourceTd.className = "hint";
-		sourceTd.textContent = person.source === "admin" ? "вручную" : person.source === "auto" ? "автоскан" : "—";
+		sourceTd.textContent = `др: ${sourceLabel(person.source)}, пол: ${sourceLabel(person.genderSource)}`;
 
 		const chatTd = document.createElement("td");
 		chatTd.className = "hint";
-		chatTd.textContent = person.chatId;
+		chatTd.textContent = chatTitleById.get(person.chatId) ?? person.chatId;
 
 		const actionsTd = document.createElement("td");
 		const deleteBtn = document.createElement("button");

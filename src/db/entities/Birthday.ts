@@ -24,6 +24,8 @@ export interface Birthday {
 	firstName: string;
 	username: string | null;
 	gender: Gender;
+	/** Кто задал пол — та же защита от перезаписи автосканом, что и у birthday/source (см. upsertAuto в birthdays-repository.ts). */
+	genderSource: BirthdaySource;
 	/** "ДД.ММ", без года — года не всегда known/нужен для поздравления. null — не найдено. */
 	birthday: string | null;
 	source: BirthdaySource;
@@ -42,6 +44,7 @@ export const BirthdaySchema = new EntitySchema<Birthday>({
 		firstName: { type: "text", name: "first_name" },
 		username: { type: "text", nullable: true },
 		gender: { type: "text", nullable: true },
+		genderSource: { type: "text", nullable: true, name: "gender_source" },
 		birthday: { type: "text", nullable: true },
 		source: { type: "text", nullable: true },
 		chatId: { type: "text", name: "chat_id" },

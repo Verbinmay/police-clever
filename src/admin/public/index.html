@@ -271,7 +271,7 @@
 			</section>
 
 			<section id="tab-birthdays" class="tab-panel">
-				<p class="hint">Бот пассивно запоминает участников (id/имя/username) и пытается по сообщениям определить пол и дату рождения — раз в двое суток, сразу по всему чату (тумблер "Дни рождения" — в заголовке чата на вкладке Подчаты, один на весь чат, не на отдельную тему). Дату, заданную здесь вручную, автоскан больше никогда не трогает. Поздравление в день рождения генерирует AI по промпту ниже и уходит в общий чат.</p>
+				<p class="hint">Бот пассивно запоминает участников чата (id/имя/username) и раз в двое суток обновляет их пол и дату рождения ИЗ ПРОФИЛЯ Telegram (bio через getChat) — переписку бот для этого не анализирует. Тумблер "Дни рождения" — в заголовке чата на вкладке Подчаты, один на весь чат, не на отдельную тему. Пол/дату, заданные здесь вручную, автообновление больше никогда не трогает. Поздравление в день рождения генерирует AI по промпту ниже и уходит в общий чат.</p>
 
 				<div class="card">
 					<h3>Промпт поздравления</h3>
@@ -283,9 +283,28 @@
 					<p class="ok-text" id="bday-config-status"></p>
 				</div>
 
+				<div class="card">
+					<h3>Добавить участника вручную</h3>
+					<p class="hint">Для тех, кого бот сам не найдёт (пустой bio, настройки приватности) — можно завести карточку самостоятельно. tgId — числовой Telegram id (его можно узнать, например, у @userinfobot).</p>
+					<form id="bday-add-form" class="controls">
+						<input type="text" id="bday-add-tgid" placeholder="Telegram id" required />
+						<input type="text" id="bday-add-name" placeholder="Имя" required />
+						<input type="text" id="bday-add-username" placeholder="Username (без @)" />
+						<select id="bday-add-gender">
+							<option value="">Пол — не указан</option>
+							<option value="male">Мужской</option>
+							<option value="female">Женский</option>
+						</select>
+						<input type="text" id="bday-add-birthday" placeholder="ДД.ММ" style="width: 70px;" />
+						<select id="bday-add-chat"></select>
+						<button type="submit" class="primary">Добавить</button>
+					</form>
+					<p class="error-text" id="bday-add-error"></p>
+				</div>
+
 				<div class="controls">
 					<h3 style="margin: 0;">Участники</h3>
-					<button type="button" id="bday-scan-now">Сканировать сейчас</button>
+					<button type="button" id="bday-scan-now">Обновить сейчас</button>
 					<span class="hint" id="bday-scan-status" style="margin: 0;"></span>
 				</div>
 				<div class="table-wrap">

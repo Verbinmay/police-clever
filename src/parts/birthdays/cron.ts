@@ -4,10 +4,10 @@ import type { Logger } from "../../logger/logger.ts";
 import { CONGRATS_CHECK_INTERVAL_MS, runBirthdayCongratulations } from "./congratulate.ts";
 import { runBirthdayScan, SCAN_INTERVAL_MS } from "./scan.ts";
 
-/** Периодический скан участников/дат рождения — раз в 48ч, см. scan.ts. */
-export function startBirthdayScanCron(repos: Repositories, logger: Logger): NodeJS.Timeout {
+/** Периодическое обновление профилей/дат рождения — раз в 48ч, см. scan.ts. botId — исключить бота из "участников" (он тоже пишет в лог сообщений, но не человек). */
+export function startBirthdayScanCron(repos: Repositories, logger: Logger, botId: string, telegram: Telegram): NodeJS.Timeout {
 	const run = () => {
-		runBirthdayScan(repos, logger).catch((err) => {
+		runBirthdayScan(repos, logger, botId, telegram).catch((err) => {
 			logger.error("Не удалось выполнить скан дней рождения", {}, err);
 		});
 	};
