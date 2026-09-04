@@ -735,6 +735,56 @@ function escapeHtml(str) {
 
 el("logs-refresh").addEventListener("click", loadLogs);
 
+// ---- Резервная копия конфига (экспорт/импорт) ----
+
+// Скачивает JSON через временную <a download> — стандартный приём для
+// клиент-сайд-генерируемого файла, сервер тут ничего не отдаёт как файл,
+// просто JSON-ответ, который браузер и сохраняет.
+el("config-export-btn").addEventListener("click", async () => {
+	const status = el("config-transfer-status");
+	status.textContent = "";
+	try {
+		const config = await api("/config-transfer");
+		const blob = new Blob([JSON.stringify(config, null, 2)], { type: "application/json" });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement("a");
+		a.href = url;
+		a.download = `revan-config-${new Date().toISOString().slice(0, 10)}.json`;
+		a.click();
+		URL.revokeObjectURL(url);
+	} catch (err) {
+		status.textContent = `Ошибка: ${err.message}`;
+	}
+});
+
+el("config-import-btn").addEventListener("click", () => el("config-import-input").click());
+
+el("config-import-input").addEventListener("change", async () => {
+	const status = el("config-transfer-status");
+	const input = el("config-import-input");
+	const file = input.files?.[0];
+	if (!file) return;
+
+	status.textContent = "Загружаю…";
+	try {
+		const text = await file.text();
+		const parsed = JSON.parse(text);
+		await api("/config-transfer", { method: "POST", body: parsed });
+		status.textContent = "Готово — конфиг применён";
+		setTimeout(() => (status.textContent = ""), 3000);
+		// Обновляем видимые вкладки, если они как раз открыты — иначе панель
+		// продолжала бы показывать старые значения до ручного переключения.
+		const activeTab = document.querySelector(".tab-btn.active")?.dataset.tab;
+		if (activeTab === "ai-config") loadAiConfig();
+		if (activeTab === "votes") loadMuteVoteConfig();
+		if (activeTab === "birthdays") loadBirthdaysConfig();
+	} catch (err) {
+		status.textContent = `Ошибка: ${err instanceof SyntaxError ? "файл не похож на валидный JSON" : err.message}`;
+	} finally {
+		input.value = "";
+	}
+});
+
 // ---- Аккаунты ----
 
 async function loadAccounts() {

@@ -14,6 +14,7 @@ import { createAiRepliesRouter } from "./routes/ai-replies.ts";
 import { createAiStatsRouter } from "./routes/ai-stats.ts";
 import { createAuthRouter } from "./routes/auth.ts";
 import { createBirthdaysRouter } from "./routes/birthdays.ts";
+import { createConfigTransferRouter } from "./routes/config-transfer.ts";
 import { createLogsRouter } from "./routes/logs.ts";
 import { createMuteVoteConfigRouter } from "./routes/mutevote-config.ts";
 import { createScenarioUsageRouter } from "./routes/scenario-usage.ts";
@@ -65,6 +66,7 @@ export async function mountAdmin(app: Express, repos: Repositories, logger: Logg
 	app.use("/api/votes", requireSession, createVotesRouter(repos.muteVotes, repos.topics, telegram, logger));
 	app.use("/api/logs", requireSession, createLogsRouter(repos.logs));
 	app.use("/api/accounts", requireSession, createAccountsRouter(repos.adminAccounts));
+	app.use("/api/config-transfer", requireSession, createConfigTransferRouter(repos.settings));
 
 	// no-cache (не no-store) — браузер/Cloudflare обязаны каждый раз
 	// перепроверять по ETag, а не тупо переиспользовать старую копию. Без

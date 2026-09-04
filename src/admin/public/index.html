@@ -337,6 +337,17 @@
 			</section>
 
 			<section id="tab-accounts" class="tab-panel">
+				<div class="card">
+					<h3>Резервная копия конфига</h3>
+					<p class="hint">Все промпты и настройки разом (AI-конфиг, голосование, дни рождения) — в один файл. Не включает рабочие данные (чаты/сообщения/участников/аккаунты/статистику) и счётчики (кулдауны, гачу) — только то, что можно поправить в панели руками.</p>
+					<div class="controls">
+						<button type="button" id="config-export-btn">Скачать конфиг</button>
+						<button type="button" id="config-import-btn">Загрузить конфиг</button>
+						<input type="file" id="config-import-input" accept="application/json" hidden />
+					</div>
+					<p class="hint" id="config-transfer-status"></p>
+				</div>
+
 				<p class="hint">Суперадмин-аккаунты панели — все равноправны, полный доступ ко всем чатам.</p>
 				<form id="accounts-add-form" class="controls">
 					<input type="text" id="accounts-username" placeholder="Логин" required />
