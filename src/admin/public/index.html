@@ -38,6 +38,7 @@
 		<main>
 			<section id="tab-topics" class="tab-panel active">
 				<p class="hint">Чат/тема регистрируется в этом списке автоматически, как только кто-то написал в неё — по умолчанию бот молчит. Включите нужные тумблеры отдельно: AI-шутки (триггер-слово + гача, платно), Да/Нет (бесплатный флейвор на слова "да"/"нет", без AI) и/или Голосование за мьют — независимо друг от друга ("подчаты" = форум-темы внутри супергруппы; для обычной группы без форума — единственная строка с thread_id=0). Название темы можно задать прямо из чата командой <code>/th Имя</code>.</p>
+				<div class="table-wrap">
 				<table id="topics-table">
 					<thead>
 						<tr>
@@ -54,6 +55,7 @@
 					</thead>
 					<tbody></tbody>
 				</table>
+				</div>
 			</section>
 
 			<section id="tab-ai-config" class="tab-panel">
@@ -227,15 +229,19 @@
 
 				<p class="hint">Агрегаты за последние 30 дней.</p>
 				<h3>По дням</h3>
+				<div class="table-wrap">
 				<table id="ai-stats-daily-table">
 					<thead><tr><th>День</th><th>Звонков</th><th>Prompt tokens</th><th>Completion tokens</th><th>$</th></tr></thead>
 					<tbody></tbody>
 				</table>
+				</div>
 				<h3>По чатам</h3>
+				<div class="table-wrap">
 				<table id="ai-stats-chats-table">
 					<thead><tr><th>chat_id</th><th>Звонков</th><th>$</th></tr></thead>
 					<tbody></tbody>
 				</table>
+				</div>
 			</section>
 
 			<section id="tab-ai-replies" class="tab-panel">
@@ -244,10 +250,12 @@
 					<input type="text" id="ai-replies-chat-id" placeholder="chat_id (пусто = все)" />
 					<button type="button" id="ai-replies-load">Показать</button>
 				</div>
+				<div class="table-wrap">
 				<table id="ai-replies-table">
 					<thead><tr><th>Время</th><th>Чат</th><th>Тема</th><th>Тип</th><th>Тон</th><th>Ответ</th><th>$</th></tr></thead>
 					<tbody></tbody>
 				</table>
+				</div>
 			</section>
 
 			<section id="tab-votes" class="tab-panel">
@@ -256,10 +264,12 @@
 					<input type="text" id="votes-chat-id" placeholder="chat_id (пусто = все)" />
 					<button type="button" id="votes-load">Показать</button>
 				</div>
+				<div class="table-wrap">
 				<table id="votes-table">
 					<thead><tr><th>Начато</th><th>Чат</th><th>Тема</th><th>Цель</th><th>Инициатор</th><th>Да/Нет</th><th>Статус</th><th></th></tr></thead>
 					<tbody></tbody>
 				</table>
+				</div>
 			</section>
 
 			<section id="tab-logs" class="tab-panel">
@@ -280,10 +290,12 @@
 					</select>
 					<button type="button" id="logs-refresh">Обновить</button>
 				</div>
+				<div class="table-wrap">
 				<table id="logs-table">
 					<thead><tr><th>Время</th><th>Часть</th><th>Уровень</th><th>Модуль</th><th>Сообщение</th><th>Контекст</th></tr></thead>
 					<tbody></tbody>
 				</table>
+				</div>
 			</section>
 
 			<section id="tab-accounts" class="tab-panel">
@@ -294,10 +306,12 @@
 					<button type="submit" class="primary">Добавить</button>
 				</form>
 				<p class="error-text" id="accounts-error"></p>
+				<div class="table-wrap">
 				<table id="accounts-table">
 					<thead><tr><th>Логин</th><th>Создан</th><th></th></tr></thead>
 					<tbody></tbody>
 				</table>
+				</div>
 			</section>
 		</main>
 	</div>

@@ -56,6 +56,8 @@ nav { display: flex; gap: 8px; flex-wrap: wrap; }
 }
 
 .tab-btn.active { background: var(--accent); border-color: var(--accent); color: white; }
+.tab-btn { transition: background-color 0.15s, border-color 0.15s, color 0.15s; }
+.tab-btn:not(.active):hover { border-color: var(--accent); color: var(--text); }
 
 main { padding: 24px; max-width: 1100px; margin: 0 auto; }
 
@@ -64,13 +66,19 @@ main { padding: 24px; max-width: 1100px; margin: 0 auto; }
 
 .hint { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
 
+/* Таблицы шире экрана скроллятся сами по себе, не раздвигают страницу вбок (особенно важно на мобильном — колонок много). */
+.table-wrap {
+	overflow-x: auto;
+	-webkit-overflow-scrolling: touch;
+	border-radius: 10px;
+	border: 1px solid var(--border);
+	margin-bottom: 8px;
+}
+
 table {
 	width: 100%;
 	border-collapse: collapse;
 	background: var(--panel);
-	border: 1px solid var(--border);
-	border-radius: 10px;
-	overflow: hidden;
 	font-size: 13px;
 }
 
@@ -82,12 +90,13 @@ tr:last-child td { border-bottom: none; }
 .expandable-row:hover td { background: color-mix(in srgb, var(--accent) 8%, transparent); }
 th { color: var(--muted); font-weight: 600; }
 
-.switch { position: relative; display: inline-block; width: 36px; height: 20px; cursor: pointer; }
+/* Чуть крупнее прежних 36x20 — на телефоне попадать пальцем в маленький тумблер неудобно. */
+.switch { position: relative; display: inline-block; width: 42px; height: 24px; cursor: pointer; }
 .switch input { opacity: 0; width: 0; height: 0; }
 .switch .slider { position: absolute; inset: 0; background: var(--border); border-radius: 999px; transition: 0.15s; }
-.switch .slider::before { content: ""; position: absolute; width: 16px; height: 16px; left: 2px; top: 2px; background: white; border-radius: 50%; transition: 0.15s; }
+.switch .slider::before { content: ""; position: absolute; width: 18px; height: 18px; left: 3px; top: 3px; background: white; border-radius: 50%; transition: 0.15s; }
 .switch input:checked + .slider { background: var(--ok); }
-.switch input:checked + .slider::before { transform: translateX(16px); }
+.switch input:checked + .slider::before { transform: translateX(18px); }
 
 .controls { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
 
@@ -99,11 +108,22 @@ select, button, input, textarea {
 	padding: 8px 10px;
 	font-size: 13px;
 	font-family: inherit;
+	transition: border-color 0.15s, background-color 0.15s;
+}
+
+/* Видимая обводка при клавиатурной навигации — не мешает мышиному клику (только :focus-visible). */
+button:focus-visible, .tab-btn:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
 }
 
 button { cursor: pointer; }
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: 0.6; cursor: default; }
 button.primary { background: var(--accent); border-color: var(--accent); color: white; }
+button.primary:hover:not(:disabled) { filter: brightness(1.1); border-color: var(--accent); }
 button.danger { border-color: var(--danger); color: var(--danger); background: transparent; }
+button.danger:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 12%, transparent); }
 
 .level-error { color: var(--danger); font-weight: 600; }
 .level-warn { color: #e0a930; font-weight: 600; }
@@ -115,7 +135,10 @@ button.danger { border-color: var(--danger); color: var(--danger); background: t
 	border-radius: 10px;
 	padding: 16px;
 	margin-bottom: 16px;
+	box-shadow: 0 1px 3px color-mix(in srgb, black 8%, transparent);
 }
+
+.card h3 { margin-top: 0; }
 
 .form-row { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
 .form-row label { font-size: 12px; color: var(--muted); }
@@ -135,6 +158,7 @@ button.danger { border-color: var(--danger); color: var(--danger); background: t
 
 .login-card {
 	width: 320px;
+	max-width: calc(100vw - 32px);
 	background: var(--panel);
 	border: 1px solid var(--border);
 	border-radius: 12px;
@@ -146,3 +170,49 @@ button.danger { border-color: var(--danger); color: var(--danger); background: t
 .login-card button { width: 100%; }
 
 [hidden] { display: none !important; }
+
+/* Мобильная адаптация. Точка перелома 640px — планшет/десктоп выше не трогаем. */
+@media (max-width: 640px) {
+	header {
+		gap: 12px;
+		padding: 12px 16px;
+	}
+	header h1 { font-size: 16px; }
+
+	/* 8 вкладок в ряд на телефоне не помещаются и не должны переноситься в
+	   три строки — горизонтальный скролл нативнее и компактнее. min-width:0
+	   обязателен — иначе flex-элемент отказывается сжиматься уже своего
+	   контента, и скроллится не nav, а вся шапка целиком. */
+	header { flex-wrap: nowrap; }
+	nav {
+		flex: 1 1 auto;
+		min-width: 0;
+		flex-wrap: nowrap;
+		overflow-x: auto;
+		-webkit-overflow-scrolling: touch;
+		scrollbar-width: none;
+	}
+	nav::-webkit-scrollbar { display: none; }
+	.tab-btn { flex: 0 0 auto; }
+
+	.spacer { display: none; }
+	#whoami { display: none; }
+
+	main { padding: 14px; }
+
+	.card { padding: 12px; }
+
+	/* Лейбл + инпут в один ряд на узком экране толкают друг друга —
+	   переносим в колонку, как обычные (не inline) form-row. */
+	.form-row.inline {
+		flex-direction: column;
+		align-items: stretch;
+		gap: 4px;
+	}
+	.form-row.inline input,
+	.form-row.inline select {
+		width: 100%;
+	}
+
+	.controls { gap: 6px; }
+}
