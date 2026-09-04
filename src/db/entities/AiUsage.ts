@@ -1,6 +1,10 @@
 import { EntitySchema } from "typeorm";
 
-export type AiUsageKind = "trigger" | "gacha" | "birthday-scan" | "birthday-congrats";
+// "birthday-scan" был раньше (AI гадал пол/дату по bio) — скан теперь без
+// AI вообще (дата — из структурированного профиля Telegram, пол только
+// вручную, см. parts/birthdays/scan.ts), значение больше нигде не пишется,
+// оставлено только "birthday-congrats" (AI-текст поздравления).
+export type AiUsageKind = "trigger" | "gacha" | "birthday-congrats";
 
 /**
  * Один вызов AI (шутка по триггер-слову или пассивная гача) — под
