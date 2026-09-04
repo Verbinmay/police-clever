@@ -49,10 +49,13 @@ function setupTabs() {
 function loadTab(tab) {
 	if (tab === "topics") return loadTopics();
 	if (tab === "ai-config") return loadAiConfig();
-	if (tab === "mutevote-config") return loadMuteVoteConfig();
 	if (tab === "ai-stats") return loadAiStats();
 	if (tab === "ai-replies") return loadAiReplies();
-	if (tab === "votes") return loadVotes();
+	// "Голосования" — конфиг спецфразы/кворума + история в одной вкладке (были две почти одинаково названные).
+	if (tab === "votes") {
+		loadMuteVoteConfig();
+		return loadVotes();
+	}
 	if (tab === "logs") return loadLogs();
 	if (tab === "accounts") return loadAccounts();
 }
@@ -60,76 +63,44 @@ function loadTab(tab) {
 // ---- Подчаты ----
 
 async function loadTopics() {
-	const chats = await api("/topics");
+	const { gacha, chats } = await api("/topics");
+	renderGachaStatus(gacha);
+
 	const tbody = document.querySelector("#topics-table tbody");
 	tbody.innerHTML = "";
 	for (const chat of chats) {
-		if (chat.topics.length === 0) {
-			tbody.appendChild(topicRow(chat, { threadId: "0", topicName: null, aiJokesEnabled: false, muteVoteEnabled: false, yesNoEnabled: false }, true));
-			continue;
-		}
-		for (const topic of chat.topics) {
-			tbody.appendChild(topicRow(chat, topic, false));
+		tbody.appendChild(chatGroupRow(chat));
+		const topics = chat.topics.length > 0 ? chat.topics : [{ threadId: "0", topicName: null, aiJokesEnabled: false, muteVoteEnabled: false, yesNoEnabled: false }];
+		for (const topic of topics) {
+			const tr = topicRow(chat, topic, chat.topics.length === 0);
+			tr.hidden = true;
+			tr.dataset.chatGroup = chat.chatId;
+			tbody.appendChild(tr);
 		}
 	}
 }
 
-function topicRow(chat, topic, empty) {
-	const tr = document.createElement("tr");
-	const label = topic.topicName ?? (topic.threadId === "0" ? "(вся группа)" : `#${topic.threadId}`);
-	tr.innerHTML = `
-		<td>${chat.title ?? "(без названия)"}</td>
-		<td>${chat.chatId}</td>
-		<td>${label}</td>
-		<td></td>
-		<td></td>
-		<td></td>
-		<td></td>
-		<td></td>
-		<td></td>
-	`;
-	if (empty) {
-		tr.querySelector("td:nth-child(4)").innerHTML = '<span class="hint">ещё нет сообщений</span>';
-		return tr;
-	}
-	tr.children[3].appendChild(toggleSwitch(topic.aiJokesEnabled, (checked) => setTopicToggle(chat.chatId, topic.threadId, { aiJokesEnabled: checked })));
-	tr.children[4].appendChild(toggleSwitch(topic.yesNoEnabled, (checked) => setTopicToggle(chat.chatId, topic.threadId, { yesNoEnabled: checked })));
-	tr.children[5].appendChild(toggleSwitch(topic.muteVoteEnabled, (checked) => setTopicToggle(chat.chatId, topic.threadId, { muteVoteEnabled: checked })));
-	// Гача вероятностная (см. gacha.ts) — счётчик это "гарантированно не
-	// позже чем через N", реально может сработать и раньше. Значение
-	// редактируемое — можно подвинуть ближе к гарантии (ответит скорее)
-	// или отодвинуть (ответит позже), не дожидаясь реальных сообщений.
-	if (topic.aiJokesEnabled) {
-		tr.children[6].appendChild(gachaCounterEditor(topic.gachaCounter, topic.gachaGuaranteedAt));
-	} else {
-		tr.children[6].textContent = "—";
-	}
-	// Кулдаун и дневной кап — счётчики на весь ЧАТ (не на тему, см. cooldown.ts),
-	// поэтому одинаковы во всех строках тем одного чата.
-	tr.children[7].textContent = chat.cooldownRemainingMin > 0 ? `ещё ${chat.cooldownRemainingMin} мин` : "—";
-	tr.children[8].textContent = chat.dailyCapRemainingMin > 0 ? `ещё ${chat.dailyCapRemainingMin} мин` : "—";
-	return tr;
-}
-
-// Счётчик гачи один на весь бот (см. gacha.ts) — редактируется с любой
-// строки, но после сохранения перезагружаем всю таблицу, чтобы значение
-// не разъехалось по остальным строкам, которые показывают тот же счётчик.
-function gachaCounterEditor(value, guaranteedAt) {
-	const wrap = document.createElement("span");
+// Счётчик гачи один на весь бот (см. gacha.ts) — отдельный элемент над
+// таблицей, а не колонка: дублировать одно и то же число в каждой строке
+// каждого чата было бессмысленно (и выглядело так, будто у каждого чата
+// своя гача, хотя счётчик общий).
+function renderGachaStatus(gacha) {
+	const container = el("gacha-status-content");
+	container.innerHTML = "";
 	const input = document.createElement("input");
 	input.type = "number";
 	input.min = "1";
-	input.max = String(guaranteedAt);
-	input.value = value;
-	input.style.width = "60px";
+	input.max = String(gacha.guaranteedAt);
+	input.value = gacha.counter;
+	input.style.width = "70px";
 	const suffix = document.createElement("span");
 	suffix.className = "hint";
-	suffix.textContent = ` / ${guaranteedAt} (может раньше, общий счётчик на весь бот)`;
+	suffix.textContent = ` / ${gacha.guaranteedAt} (вероятностная — реально может сработать раньше)`;
 
 	input.addEventListener("change", async () => {
 		const next = Number(input.value);
 		if (!Number.isFinite(next) || next < 1) {
-			input.value = value;
+			input.value = gacha.counter;
 			return;
 		}
 		try {
@@ -137,12 +108,59 @@ function gachaCounterEditor(value, guaranteedAt) {
 			loadTopics();
 		} catch (err) {
 			alert(`Не удалось изменить счётчик: ${err.message}`);
-			input.value = value;
+			input.value = gacha.counter;
 		}
 	});
 
-	wrap.append(input, suffix);
-	return wrap;
+	container.append(input, suffix);
+}
+
+// Заголовок группы — сам чат, кликабельный: разворачивает/сворачивает
+// список его тем (по умолчанию свёрнут, "выпадающий список"). Кулдаун и
+// дневной кап тоже общие на весь ЧАТ (не на тему) — показываем их тут же
+// в заголовке, а не повторяем в каждой строке темы.
+function chatGroupRow(chat) {
+	const tr = document.createElement("tr");
+	tr.className = "expandable-row chat-group-row";
+	const td = document.createElement("td");
+	td.colSpan = 4;
+
+	const extras = [];
+	if (chat.cooldownRemainingMin > 0) extras.push(`кулдаун ещё ${chat.cooldownRemainingMin} мин`);
+	if (chat.dailyCapRemainingMin > 0) extras.push(`дневной лимит ещё ${chat.dailyCapRemainingMin} мин`);
+	const topicsCount = chat.topics.length > 0 ? `${chat.topics.length} ${chat.topics.length === 1 ? "тема" : "тем"}` : "тем ещё нет";
+
+	td.innerHTML = `<span class="chat-group-toggle">▶</span> <strong>${chat.title ?? "(без названия)"}</strong> <span class="hint">${chat.chatId} · ${topicsCount}${extras.length ? " · " + extras.join(" · ") : ""}</span>`;
+	tr.appendChild(td);
+
+	tr.addEventListener("click", () => {
+		const expanded = tr.classList.toggle("expanded");
+		td.querySelector(".chat-group-toggle").textContent = expanded ? "▼" : "▶";
+		document.querySelectorAll(`tr[data-chat-group="${CSS.escape(chat.chatId)}"]`).forEach((row) => {
+			row.hidden = !expanded;
+		});
+	});
+
+	return tr;
+}
+
+function topicRow(chat, topic, empty) {
+	const tr = document.createElement("tr");
+	const label = topic.topicName ?? (topic.threadId === "0" ? "(вся группа)" : `#${topic.threadId}`);
+	tr.innerHTML = `
+		<td>${label}</td>
+		<td></td>
+		<td></td>
+		<td></td>
+	`;
+	if (empty) {
+		tr.children[0].innerHTML += ' <span class="hint">ещё нет сообщений</span>';
+		return tr;
+	}
+	tr.children[1].appendChild(toggleSwitch(topic.aiJokesEnabled, (checked) => setTopicToggle(chat.chatId, topic.threadId, { aiJokesEnabled: checked })));
+	tr.children[2].appendChild(toggleSwitch(topic.yesNoEnabled, (checked) => setTopicToggle(chat.chatId, topic.threadId, { yesNoEnabled: checked })));
+	tr.children[3].appendChild(toggleSwitch(topic.muteVoteEnabled, (checked) => setTopicToggle(chat.chatId, topic.threadId, { muteVoteEnabled: checked })));
+	return tr;
 }
 
 function toggleSwitch(checked, onChange) {
@@ -186,8 +204,6 @@ async function loadAiConfig() {
 
 	el("ai-cooldown").value = config.cooldownMinutes;
 	el("ai-daily-cap").value = config.dailyCallCapPerChat;
-	el("ai-max-tokens").value = config.maxTokens;
-	el("ai-char-budget").value = config.contextCharBudget;
 	el("ai-participants-window").value = config.activeParticipantsLookback;
 
 	el("ai-sticker-pack").value = config.stickerPackShortName;
@@ -203,7 +219,6 @@ async function loadAiConfig() {
 	el("actions-praise").value = config.actionsByTone.praise.join("\n");
 
 	el("ai-guaranteed").value = config.gachaGuaranteedAt;
-	el("ai-curve").value = JSON.stringify(config.gachaCurve, null, 2);
 	el("ai-yesno-prob").value = config.yesNoReplyProbability;
 	el("ai-yes").value = config.yesAnswers.join("\n");
 	el("ai-no").value = config.noAnswers.join("\n");
@@ -213,7 +228,6 @@ el("ai-config-save").addEventListener("click", async () => {
 	const status = el("ai-config-status");
 	status.textContent = "";
 	try {
-		const gachaCurve = JSON.parse(el("ai-curve").value);
 		await api("/ai-config", {
 			method: "PUT",
 			body: {
@@ -241,8 +255,6 @@ el("ai-config-save").addEventListener("click", async () => {
 
 				cooldownMinutes: Number(el("ai-cooldown").value),
 				dailyCallCapPerChat: Number(el("ai-daily-cap").value),
-				maxTokens: Number(el("ai-max-tokens").value),
-				contextCharBudget: Number(el("ai-char-budget").value),
 				stickerPackShortName: el("ai-sticker-pack").value.trim(),
 				stickerCooldownMinutes: Number(el("ai-sticker-cooldown").value),
 				activeParticipantsLookback: Number(el("ai-participants-window").value),
@@ -261,7 +273,6 @@ el("ai-config-save").addEventListener("click", async () => {
 				},
 
 				gachaGuaranteedAt: Number(el("ai-guaranteed").value),
-				gachaCurve,
 				yesNoReplyProbability: Number(el("ai-yesno-prob").value),
 				yesAnswers: linesOf("ai-yes"),
 				noAnswers: linesOf("ai-no"),

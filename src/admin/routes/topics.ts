@@ -21,8 +21,7 @@ export function createTopicsRouter(chats: ChatsRepository, topics: TopicsReposit
 
 		// Гача — вероятностная и может сработать раньше guaranteedAt (см.
 		// gacha.ts) — счётчик тут это "не позже чем через", а не точный таймер.
-		// Один общий счётчик на весь бот (не на тему) — показываем на каждой
-		// строке темы с AI-шутками одно и то же значение.
+		// Один общий счётчик на весь бот (не на тему), см. res.json ниже.
 		const gachaCounter = await peekGachaCounter(settings);
 
 		const topicsByChat = new Map<string, typeof allTopics>();
@@ -52,16 +51,17 @@ export function createTopicsRouter(chats: ChatsRepository, topics: TopicsReposit
 			}),
 		);
 
-		res.json(
-			chatsWithCounters.map((chat) => ({
+		// Гача общая на весь бот — отдаём один раз на верхнем уровне, а не
+		// дублируем на каждую тему/чат в ответе (это и есть сам разговор,
+		// который привёл к этой правке: дублирование в таблице выглядело
+		// так, будто у каждого чата своя гача, хотя счётчик один общий).
+		res.json({
+			gacha: { counter: gachaCounter, guaranteedAt: aiConfig.gachaGuaranteedAt },
+			chats: chatsWithCounters.map((chat) => ({
 				...chat,
-				topics: (topicsByChat.get(chat.chatId) ?? []).map((t) => ({
-					...t,
-					gachaCounter: t.aiJokesEnabled ? gachaCounter : null,
-					gachaGuaranteedAt: aiConfig.gachaGuaranteedAt,
-				})),
+				topics: topicsByChat.get(chat.chatId) ?? [],
 			})),
-		);
+		});
 	});
 
 	router.put("/:chatId/:threadId", async (req, res) => {
