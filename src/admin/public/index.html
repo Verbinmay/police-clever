@@ -23,7 +23,6 @@
 			<nav>
 				<button type="button" data-tab="topics" class="tab-btn active">Подчаты</button>
 				<button type="button" data-tab="ai-config" class="tab-btn">AI-конфиг</button>
-				<button type="button" data-tab="mutevote-config" class="tab-btn">Голосование</button>
 				<button type="button" data-tab="ai-stats" class="tab-btn">Статистика AI</button>
 				<button type="button" data-tab="ai-replies" class="tab-btn">Ответы AI</button>
 				<button type="button" data-tab="votes" class="tab-btn">Голосования</button>
@@ -37,20 +36,20 @@
 
 		<main>
 			<section id="tab-topics" class="tab-panel active">
-				<p class="hint">Чат/тема регистрируется в этом списке автоматически, как только кто-то написал в неё — по умолчанию бот молчит. Включите нужные тумблеры отдельно: AI-шутки (триггер-слово + гача, платно), Да/Нет (бесплатный флейвор на слова "да"/"нет", без AI) и/или Голосование за мьют — независимо друг от друга ("подчаты" = форум-темы внутри супергруппы; для обычной группы без форума — единственная строка с thread_id=0). Название темы можно задать прямо из чата командой <code>/th Имя</code>.</p>
+				<p class="hint">Чат/тема регистрируется в этом списке автоматически, как только кто-то написал в неё — по умолчанию бот молчит. Включите нужные тумблеры отдельно: AI-шутки (триггер-слово + гача, платно), Да/Нет (бесплатный флейвор на слова "да"/"нет", без AI) и/или Голосование за мьют — независимо друг от друга. Кликните по чату, чтобы развернуть его темы ("подчаты" = форум-темы внутри супергруппы; для обычной группы без форума — единственная строка "вся группа"). Название темы можно задать прямо из чата командой <code>/th Имя</code>.</p>
+				<div class="card" id="gacha-status-card">
+					<h3>Гача — общая на весь бот</h3>
+					<p class="hint">Один счётчик на все чаты и темы вместе — показывать его в каждой строке таблицы было бы просто дублированием одного и того же числа.</p>
+					<div id="gacha-status-content"></div>
+				</div>
 				<div class="table-wrap">
 				<table id="topics-table">
 					<thead>
 						<tr>
-							<th>Чат</th>
-							<th>chat_id</th>
-							<th>thread_id / тема</th>
+							<th>Тема</th>
 							<th>AI-шутки</th>
 							<th>Да/Нет</th>
 							<th>Голосование</th>
-							<th>Гача</th>
-							<th>Кулдаун AI</th>
-							<th>Дневной лимит</th>
 						</tr>
 					</thead>
 					<tbody></tbody>
@@ -63,7 +62,6 @@
 
 				<div class="card">
 					<h3>Провайдер и месячный бюджет</h3>
-					<p class="hint">Оба ключа (DeepSeek/OpenAI) читаются из env — переключение здесь не требует перезапуска. baseURL/модель/цена за токен — оценочные, для расчёта $ в статистике; если провайдер изменит цены, поправьте здесь.</p>
 					<div class="form-row inline">
 						<label>Активный провайдер</label>
 						<select id="ai-provider">
@@ -76,15 +74,19 @@
 						<input type="number" id="ai-monthly-budget" min="0" step="0.5" />
 					</div>
 
-					<div class="form-row inline"><label>DeepSeek — модель</label><input type="text" id="p-deepseek-model" /></div>
-					<div class="form-row inline"><label>DeepSeek — baseURL</label><input type="text" id="p-deepseek-baseurl" /></div>
-					<div class="form-row inline"><label>DeepSeek — $/1M вход</label><input type="number" id="p-deepseek-in" min="0" step="0.01" /></div>
-					<div class="form-row inline"><label>DeepSeek — $/1M выход</label><input type="number" id="p-deepseek-out" min="0" step="0.01" /></div>
+					<details>
+						<summary class="hint">Технические детали провайдеров (модель/baseURL/цена за токен)</summary>
+						<p class="hint">Оба ключа (DeepSeek/OpenAI) читаются из env — переключение выше не требует перезапуска. baseURL/модель/цена за токен — оценочные, для расчёта $ в статистике; если провайдер изменит цены, поправьте здесь.</p>
+						<div class="form-row inline"><label>DeepSeek — модель</label><input type="text" id="p-deepseek-model" /></div>
+						<div class="form-row inline"><label>DeepSeek — baseURL</label><input type="text" id="p-deepseek-baseurl" /></div>
+						<div class="form-row inline"><label>DeepSeek — $/1M вход</label><input type="number" id="p-deepseek-in" min="0" step="0.01" /></div>
+						<div class="form-row inline"><label>DeepSeek — $/1M выход</label><input type="number" id="p-deepseek-out" min="0" step="0.01" /></div>
 
-					<div class="form-row inline"><label>OpenAI — модель</label><input type="text" id="p-openai-model" /></div>
-					<div class="form-row inline"><label>OpenAI — baseURL</label><input type="text" id="p-openai-baseurl" /></div>
-					<div class="form-row inline"><label>OpenAI — $/1M вход</label><input type="number" id="p-openai-in" min="0" step="0.01" /></div>
-					<div class="form-row inline"><label>OpenAI — $/1M выход</label><input type="number" id="p-openai-out" min="0" step="0.01" /></div>
+						<div class="form-row inline"><label>OpenAI — модель</label><input type="text" id="p-openai-model" /></div>
+						<div class="form-row inline"><label>OpenAI — baseURL</label><input type="text" id="p-openai-baseurl" /></div>
+						<div class="form-row inline"><label>OpenAI — $/1M вход</label><input type="number" id="p-openai-in" min="0" step="0.01" /></div>
+						<div class="form-row inline"><label>OpenAI — $/1M выход</label><input type="number" id="p-openai-out" min="0" step="0.01" /></div>
+					</details>
 				</div>
 
 				<div class="card">
@@ -108,14 +110,6 @@
 					<div class="form-row inline">
 						<label>Дневной кап AI-вызовов на чат</label>
 						<input type="number" id="ai-daily-cap" min="1" />
-					</div>
-					<div class="form-row inline">
-						<label>max_tokens ответа-шутки</label>
-						<input type="number" id="ai-max-tokens" min="50" />
-					</div>
-					<div class="form-row inline">
-						<label>Бюджет контекста, символов</label>
-						<input type="number" id="ai-char-budget" min="100" />
 					</div>
 					<div class="form-row inline">
 						<label>Окно "активных участников", сообщений</label>
@@ -168,10 +162,7 @@
 						<label>Гарантированный ответ на N-м сообщении</label>
 						<input type="number" id="ai-guaranteed" min="1" />
 					</div>
-					<div class="form-row">
-						<label>Кривая гачи (JSON: [{"upToFraction":0.3,"probability":0.005}, ...] — upToFraction это доля пути до "гарантированного" порога выше, 0-1, а не абсолютный номер сообщения — при изменении порога кривая пересчитывается сама)</label>
-						<textarea id="ai-curve"></textarea>
-					</div>
+					<p class="hint">Сама кривая нарастания вероятности (soft pity) — только через API/код, не здесь.</p>
 				</div>
 
 				<div class="card">
@@ -192,30 +183,6 @@
 
 				<button type="button" id="ai-config-save" class="primary">Сохранить</button>
 				<p class="ok-text" id="ai-config-status"></p>
-			</section>
-
-			<section id="tab-mutevote-config" class="tab-panel">
-				<p class="hint">Спецфраза, которой нужно ответить на сообщение нарушителя, чтобы открыть голосование, и его правила.</p>
-				<div class="card">
-					<div class="form-row">
-						<label>Спецфраза</label>
-						<input type="text" id="mv-phrase" />
-					</div>
-					<div class="form-row inline">
-						<label>Кворум "да"</label>
-						<input type="number" id="mv-quorum" min="1" />
-					</div>
-					<div class="form-row inline">
-						<label>Окно голосования, мин</label>
-						<input type="number" id="mv-window" min="1" />
-					</div>
-					<div class="form-row inline">
-						<label>Длительность мьюта, мин</label>
-						<input type="number" id="mv-mute" min="1" />
-					</div>
-					<button type="button" id="mv-config-save" class="primary">Сохранить</button>
-					<p class="ok-text" id="mv-config-status"></p>
-				</div>
 			</section>
 
 			<section id="tab-ai-stats" class="tab-panel">
@@ -259,7 +226,31 @@
 			</section>
 
 			<section id="tab-votes" class="tab-panel">
-				<p class="hint">История голосований за мьют по всем чатам, свежие сначала. У успешных ("muted") доступна кнопка снять мьют вручную.</p>
+				<div class="card">
+					<h3>Настройки голосования за мьют</h3>
+					<p class="hint">Спецфраза, которой нужно ответить на сообщение нарушителя, чтобы открыть голосование, и его правила.</p>
+					<div class="form-row">
+						<label>Спецфраза</label>
+						<input type="text" id="mv-phrase" />
+					</div>
+					<div class="form-row inline">
+						<label>Кворум "да"</label>
+						<input type="number" id="mv-quorum" min="1" />
+					</div>
+					<div class="form-row inline">
+						<label>Окно голосования, мин</label>
+						<input type="number" id="mv-window" min="1" />
+					</div>
+					<div class="form-row inline">
+						<label>Длительность мьюта, мин</label>
+						<input type="number" id="mv-mute" min="1" />
+					</div>
+					<button type="button" id="mv-config-save" class="primary">Сохранить</button>
+					<p class="ok-text" id="mv-config-status"></p>
+				</div>
+
+				<h3>История голосований</h3>
+				<p class="hint">По всем чатам, свежие сначала. У успешных ("muted") доступна кнопка снять мьют вручную.</p>
 				<div class="controls">
 					<input type="text" id="votes-chat-id" placeholder="chat_id (пусто = все)" />
 					<button type="button" id="votes-load">Показать</button>

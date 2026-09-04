@@ -90,6 +90,14 @@ tr:last-child td { border-bottom: none; }
 .expandable-row:hover td { background: color-mix(in srgb, var(--accent) 8%, transparent); }
 th { color: var(--muted); font-weight: 600; }
 
+/* Заголовок группы чата в "Подчатах" — визуально отделён от обычных строк тем, свёрнут по умолчанию. */
+.chat-group-row td { background: color-mix(in srgb, var(--accent) 5%, transparent); white-space: normal; }
+.chat-group-toggle { display: inline-block; width: 1em; color: var(--muted); }
+
+details { margin-top: 4px; }
+details summary { cursor: pointer; margin-bottom: 8px; }
+details[open] summary { margin-bottom: 12px; }
+
 /* Чуть крупнее прежних 36x20 — на телефоне попадать пальцем в маленький тумблер неудобно. */
 .switch { position: relative; display: inline-block; width: 42px; height: 24px; cursor: pointer; }
 .switch input { opacity: 0; width: 0; height: 0; }
