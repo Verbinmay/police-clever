@@ -20,8 +20,6 @@ export interface AiUsage {
 	chatId: string;
 	threadId: string;
 	kind: AiUsageKind;
-	/** Категория тона (general/targeted/sarcasm/praise) — null для триггер-вызовов, там тон не выбирается. */
-	tone: string | null;
 	provider: string;
 	/** Системный промпт, реально отправленный модели (шаблон + сценарий/явный текст триггера). */
 	promptText: string;
@@ -44,7 +42,6 @@ export const AiUsageSchema = new EntitySchema<AiUsage>({
 		chatId: { type: "text", name: "chat_id" },
 		threadId: { type: "text", default: "0", name: "thread_id" },
 		kind: { type: "text" },
-		tone: { type: "text", nullable: true },
 		provider: { type: "text", default: "deepseek" },
 		promptText: { type: "text", default: "", name: "prompt_text" },
 		userContent: { type: "text", default: "", name: "user_content" },

@@ -96,7 +96,6 @@ export async function runBirthdayCongratulations(repos: Repositories, telegram: 
 				// не в birthday.threadId (тот чисто справочный).
 				threadId: "0",
 				kind: "birthday-congrats",
-				tone: null,
 				provider: aiConfig.provider,
 				promptText: prompt,
 				userContent: `Сегодня день рождения у ${birthday.firstName}.`,
