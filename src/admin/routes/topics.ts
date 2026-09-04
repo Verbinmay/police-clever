@@ -70,21 +70,36 @@ export function createTopicsRouter(chats: ChatsRepository, topics: TopicsReposit
 			res.status(400).json({ error: "chatId/threadId обязательны" });
 			return;
 		}
-		const { aiJokesEnabled, muteVoteEnabled, yesNoEnabled, birthdaysEnabled } = req.body as {
+		const { aiJokesEnabled, muteVoteEnabled, yesNoEnabled } = req.body as {
 			aiJokesEnabled?: boolean;
 			muteVoteEnabled?: boolean;
 			yesNoEnabled?: boolean;
-			birthdaysEnabled?: boolean;
 		};
-		const patch: Partial<{ aiJokesEnabled: boolean; muteVoteEnabled: boolean; yesNoEnabled: boolean; birthdaysEnabled: boolean }> = {};
+		const patch: Partial<{ aiJokesEnabled: boolean; muteVoteEnabled: boolean; yesNoEnabled: boolean }> = {};
 		if (typeof aiJokesEnabled === "boolean") patch.aiJokesEnabled = aiJokesEnabled;
 		if (typeof muteVoteEnabled === "boolean") patch.muteVoteEnabled = muteVoteEnabled;
 		if (typeof yesNoEnabled === "boolean") patch.yesNoEnabled = yesNoEnabled;
-		if (typeof birthdaysEnabled === "boolean") patch.birthdaysEnabled = birthdaysEnabled;
 
 		const updated = await topics.setToggles(chatId, threadId, patch);
 		if (!updated) {
 			res.status(404).json({ error: "Тема не найдена" });
+			return;
+		}
+		res.json(updated);
+	});
+
+	/** Учёт дней рождения (см. Chat.birthdaysEnabled) — тумблер на весь ЧАТ целиком, не на отдельную тему, поэтому отдельный роут вместо patch у /:chatId/:threadId. */
+	router.put("/chat/:chatId/birthdays", async (req, res) => {
+		const { chatId } = req.params;
+		const { enabled } = req.body as { enabled?: boolean };
+		if (!chatId || typeof enabled !== "boolean") {
+			res.status(400).json({ error: "chatId и enabled (boolean) обязательны" });
+			return;
+		}
+
+		const updated = await chats.setBirthdaysEnabled(chatId, enabled);
+		if (!updated) {
+			res.status(404).json({ error: "Чат не найден" });
 			return;
 		}
 		res.json(updated);

@@ -61,7 +61,7 @@ export async function mountAdmin(app: Express, repos: Repositories, logger: Logg
 	app.use("/api/mutevote-config", requireSession, createMuteVoteConfigRouter(repos.settings));
 	app.use("/api/ai-stats", requireSession, createAiStatsRouter(repos.aiUsage, repos.settings));
 	app.use("/api/scenario-usage", requireSession, createScenarioUsageRouter(repos.settings));
-	app.use("/api/birthdays", requireSession, createBirthdaysRouter(repos.birthdays, repos.settings));
+	app.use("/api/birthdays", requireSession, createBirthdaysRouter(repos, logger));
 	app.use("/api/votes", requireSession, createVotesRouter(repos.muteVotes, repos.topics, telegram, logger));
 	app.use("/api/logs", requireSession, createLogsRouter(repos.logs));
 	app.use("/api/accounts", requireSession, createAccountsRouter(repos.adminAccounts));

@@ -21,8 +21,6 @@ export interface Topic {
 	aiJokesEnabled: boolean;
 	muteVoteEnabled: boolean;
 	yesNoEnabled: boolean;
-	/** Скан участников/др для этой темы (см. parts/birthdays) — отдельный тумблер: можно вести учёт дней рождения без AI-шуток и наоборот. */
-	birthdaysEnabled: boolean;
 	updatedAt: Date;
 }
 
@@ -36,7 +34,6 @@ export const TopicSchema = new EntitySchema<Topic>({
 		aiJokesEnabled: { type: "boolean", default: false, name: "ai_jokes_enabled" },
 		muteVoteEnabled: { type: "boolean", default: false, name: "mute_vote_enabled" },
 		yesNoEnabled: { type: "boolean", default: false, name: "yes_no_enabled" },
-		birthdaysEnabled: { type: "boolean", default: false, name: "birthdays_enabled" },
 		updatedAt: { type: "timestamptz", name: "updated_at", updateDate: true },
 	},
 });

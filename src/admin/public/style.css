@@ -84,6 +84,13 @@ table {
 
 th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
 td.wrap { white-space: normal; }
+/* Числовая/короткая колонка — ужимается до содержимого (width:1% — classic
+   "shrink-to-fit" трюк для auto table layout), а не растягивается вместе с
+   остальным пустым местом. Без этого несколько таблиц подряд с разной
+   длиной текста в первой колонке (см. "Использование сценариев" в
+   AI-конфиге) дают РАЗНУЮ ширину этой колонки в каждой таблице — визуально
+   "прыгает" при просмотре сверху вниз, хотя колонка одна и та же по смыслу. */
+th.num, td.num { width: 1%; text-align: right; }
 tr:last-child td { border-bottom: none; }
 
 .expandable-row { cursor: pointer; }
@@ -93,6 +100,7 @@ th { color: var(--muted); font-weight: 600; }
 /* Заголовок группы чата в "Подчатах" — визуально отделён от обычных строк тем, свёрнут по умолчанию. */
 .chat-group-row td { background: color-mix(in srgb, var(--accent) 5%, transparent); white-space: normal; }
 .chat-group-toggle { display: inline-block; width: 1em; color: var(--muted); }
+.chat-group-birthdays { display: inline-flex; align-items: center; gap: 6px; margin-left: 16px; vertical-align: middle; }
 
 details { margin-top: 4px; }
 details summary { cursor: pointer; margin-bottom: 8px; }

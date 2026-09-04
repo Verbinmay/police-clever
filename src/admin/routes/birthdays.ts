@@ -1,18 +1,22 @@
 import { Router } from "express";
-import type { BirthdaysRepository } from "../../db/repositories/birthdays-repository.ts";
-import type { SettingsRepository } from "../../db/repositories/settings-repository.ts";
+import type { Repositories } from "../../bot-part.ts";
+import type { Logger } from "../../logger/logger.ts";
 import { loadBirthdaysConfig, saveBirthdaysConfig } from "../../parts/birthdays/config.ts";
 import type { BirthdaysConfig } from "../../parts/birthdays/default-config.ts";
+import { runBirthdayScan } from "../../parts/birthdays/scan.ts";
 
 const BIRTHDAY_RE = /^\d{2}\.\d{2}$/;
 
 /**
  * Таблица дней рождения (список + ручная правка даты + удаление) и промпт
  * поздравления (BirthdaysConfig) — оба по прямому требованию выведены в
- * панель. Сам скан/рассылка — фоновые кроны (parts/birthdays/cron.ts), тут
- * только чтение/правка того, что они накопили.
+ * панель. Сам скан — фоновый крон (parts/birthdays/cron.ts, раз в 48ч), тут
+ * ещё и ручной запуск (POST /scan) — иначе после первого включения
+ * тумблера в "Подчаты" пришлось бы ждать до 48 часов, чтобы увидеть
+ * результат.
  */
-export function createBirthdaysRouter(birthdays: BirthdaysRepository, settings: SettingsRepository): Router {
+export function createBirthdaysRouter(repos: Repositories, logger: Logger): Router {
+	const { birthdays, settings } = repos;
 	const router = Router();
 
 	router.get("/", async (_req, res) => {
@@ -31,6 +35,17 @@ export function createBirthdaysRouter(birthdays: BirthdaysRepository, settings: 
 		const next: BirthdaysConfig = { ...current, ...patch };
 		await saveBirthdaysConfig(settings, next);
 		res.json(next);
+	});
+
+	/** Ручной запуск скана прямо сейчас (не дожидаясь 48ч) — синхронно, чтобы панель могла показать "готово"/ошибку сразу. */
+	router.post("/scan", async (_req, res) => {
+		try {
+			await runBirthdayScan(repos, logger);
+			res.json({ ok: true });
+		} catch (err) {
+			logger.error("Ручной запуск скана дней рождения не удался", {}, err);
+			res.status(500).json({ error: "Скан не удался — см. логи" });
+		}
 	});
 
 	/** Ручная правка даты — ставит source="admin", после этого автоскан это поле больше не трогает (см. birthdays-repository.ts). Пустая строка — снять дату. */
