@@ -47,7 +47,6 @@
 							<th>AI-шутки</th>
 							<th>Да/Нет</th>
 							<th>Голосование</th>
-							<th>Сводка (авто)</th>
 							<th>Гача</th>
 							<th>Кулдаун AI</th>
 							<th>Дневной лимит</th>
@@ -133,37 +132,6 @@
 						<label>Кулдаун стикера, мин</label>
 						<input type="number" id="ai-sticker-cooldown" min="0" />
 					</div>
-				</div>
-
-				<div class="card">
-					<h3>Роллинг-саммари</h3>
-					<p class="hint">Раз в N сообщений бот дешёвым отдельным вызовом обновляет короткую сводку атмосферы чата — каждая шутка использует её вместо того, чтобы каждый раз перечитывать длинную историю.</p>
-					<div class="form-row inline">
-						<label>Сводка включена</label>
-						<input type="checkbox" id="ai-summary-enabled" />
-					</div>
-					<p class="hint">Выкл. (сейчас так) — сводка не собирается и не участвует в ответах, бот видит только сырой хвост сообщений. Временно отключено: сводка обновляется раз в N сообщений и в живом чате успевала устареть — бот держался за старую тему из сводки, хотя разговор уже ушёл дальше.</p>
-					<div class="form-row inline">
-						<label>Обновлять каждые N сообщений</label>
-						<input type="number" id="ai-summary-every" min="5" />
-					</div>
-					<div class="form-row inline">
-						<label>Сколько сообщений брать при обновлении</label>
-						<input type="number" id="ai-summary-lookback" min="5" />
-					</div>
-					<div class="form-row inline">
-						<label>Максимум символов в саммари</label>
-						<input type="number" id="ai-summary-maxchars" min="100" />
-					</div>
-					<div class="form-row inline">
-						<label>max_tokens вызова саммари</label>
-						<input type="number" id="ai-summary-maxtokens" min="30" />
-					</div>
-					<div class="form-row inline">
-						<label>Накопительная сводка (обновлять, а не заменять)</label>
-						<input type="checkbox" id="ai-summary-cumulative" />
-					</div>
-					<p class="hint">Выкл. (по умолчанию) — сводка каждый раз пересобирается заново только из последних сообщений, старая отбрасывается. Вкл. — старая сводка передаётся модели вместе с новыми сообщениями, и она её обновляет: бот дольше помнит атмосферу чата, но со временем может закрепить устойчивый образ конкретных участников.</p>
 				</div>
 
 				<div class="card">
