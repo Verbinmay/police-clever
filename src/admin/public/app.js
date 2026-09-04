@@ -520,6 +520,28 @@ el("bday-config-save").addEventListener("click", async () => {
 	}
 });
 
+// Одна общая кнопка теста (не по кнопке на каждого из отслеживаемых
+// участников) — реальный AI-вызов по текущему промпту, но без отправки в
+// чат: посмотреть, что бот реально пришлёт, прежде чем случится настоящий
+// день рождения.
+el("bday-test-run").addEventListener("click", async () => {
+	const btn = el("bday-test-run");
+	const result = el("bday-test-result");
+	btn.disabled = true;
+	result.textContent = "Генерирую…";
+	try {
+		const { text } = await api("/birthdays/test-congrats", {
+			method: "POST",
+			body: { firstName: el("bday-test-name").value.trim() || "Тестовый", gender: el("bday-test-gender").value || null },
+		});
+		result.textContent = text;
+	} catch (err) {
+		result.textContent = `Ошибка: ${err.message}`;
+	} finally {
+		btn.disabled = false;
+	}
+});
+
 // Фоновое обновление идёт раз в 48ч само по себе — кнопка нужна только
 // чтобы не ждать этот срок после первого включения тумблера в "Подчаты" (и
 // вообще для проверки, что всё работает). Без AI — просто getChat на

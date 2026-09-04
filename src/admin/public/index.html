@@ -264,6 +264,18 @@
 					</div>
 					<button type="button" id="bday-config-save" class="primary">Сохранить</button>
 					<p class="ok-text" id="bday-config-status"></p>
+
+					<p class="hint" style="margin-top: 12px;">Проверить, что реально сгенерирует AI — без отправки в чат (но реальный AI-вызов, расходует бюджет как обычно).</p>
+					<div class="controls">
+						<input type="text" id="bday-test-name" placeholder="Имя" value="Тестовый" style="width: 140px;" />
+						<select id="bday-test-gender">
+							<option value="">Пол — не указан</option>
+							<option value="male">Мужской</option>
+							<option value="female">Женский</option>
+						</select>
+						<button type="button" id="bday-test-run">Тест</button>
+					</div>
+					<p id="bday-test-result" class="hint" style="white-space: pre-wrap;"></p>
 				</div>
 
 				<div class="card">

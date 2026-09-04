@@ -47,6 +47,52 @@ function nowInMoscow(): { dayMonth: string; isoDate: string; hour: number } {
 }
 
 /**
+ * Один AI-вызов на текст поздравления — общий для настоящей ежедневной
+ * рассылки (runBirthdayCongratulations) и тестовой кнопки "Тест" в панели
+ * (generateTestCongrats, см. ниже): та же генерация, только вызывающая
+ * сторона решает, отправлять ли результат в чат. usageChatId — куда
+ * записать в AiUsage (реальный chatId для настоящей отправки, "test" для
+ * превью из панели — реальный AI-вызов и его стоимость происходят в обоих
+ * случаях, статистика не должна быть слепа к тестам).
+ */
+async function generateCongratsMessage(repos: Repositories, logger: Logger, firstName: string, gender: Gender, usageChatId: string): Promise<string | null> {
+	const aiConfig = await loadAiConfig(repos.settings);
+	const apiKey = API_KEYS[aiConfig.provider];
+	if (!apiKey) {
+		logger.error(`Поздравление не сгенерировано — ${apiKeyEnvVar(aiConfig.provider)} не задан`, { provider: aiConfig.provider });
+		return null;
+	}
+	const client = createAiClient(aiConfig.providers[aiConfig.provider], apiKey, aiConfig.provider);
+	const birthdaysConfig = await loadBirthdaysConfig(repos.settings);
+
+	const genderLabel = GENDER_LABEL[gender ?? "unknown"];
+	const prompt = birthdaysConfig.congratsPromptTemplate.replace("{name}", firstName).replace("{gender}", genderLabel);
+	const userContent = `Сегодня день рождения у ${firstName}.`;
+
+	const reply = await client.getReply(prompt, userContent, logger, 300);
+	if (!reply) {
+		logger.warn("Не удалось сгенерировать поздравление", { firstName });
+		return null;
+	}
+
+	const costUsd = estimateCostUsd(reply.promptTokens, reply.completionTokens, aiConfig.providers[aiConfig.provider]);
+	await repos.aiUsage.record({
+		chatId: usageChatId,
+		threadId: "0",
+		kind: "birthday-congrats",
+		provider: aiConfig.provider,
+		promptText: prompt,
+		userContent,
+		replyText: reply.text,
+		promptTokens: reply.promptTokens,
+		completionTokens: reply.completionTokens,
+		costUsd,
+	});
+
+	return reply.text;
+}
+
+/**
  * Раз в час (см. CONGRATS_CHECK_INTERVAL_MS) проверяет, у кого сегодня день
  * рождения (по московскому времени), и шлёт AI-сгенерированное поздравление
  * в общий чат — но только в час CONGRATS_HOUR_MOSCOW (12 дня), не в любой
@@ -64,45 +110,21 @@ export async function runBirthdayCongratulations(repos: Repositories, telegram: 
 	const pending = birthdays.filter((birthday) => sentLog[birthday.tgId] !== isoDate);
 	if (pending.length === 0) return;
 
-	const aiConfig = await loadAiConfig(repos.settings);
-	const apiKey = API_KEYS[aiConfig.provider];
-	if (!apiKey) {
-		logger.error(`Поздравления пропущены — ${apiKeyEnvVar(aiConfig.provider)} не задан`, { provider: aiConfig.provider });
-		return;
-	}
-	const client = createAiClient(aiConfig.providers[aiConfig.provider], apiKey, aiConfig.provider);
-	const birthdaysConfig = await loadBirthdaysConfig(repos.settings);
-
 	for (const birthday of pending) {
 		try {
-			const genderLabel = GENDER_LABEL[birthday.gender ?? "unknown"];
-			const prompt = birthdaysConfig.congratsPromptTemplate.replace("{name}", birthday.firstName).replace("{gender}", genderLabel);
+			const text = await generateCongratsMessage(repos, logger, birthday.firstName, birthday.gender, birthday.chatId);
+			if (!text) continue;
 
-			const reply = await client.getReply(prompt, `Сегодня день рождения у ${birthday.firstName}.`, logger, 300);
-			if (!reply) {
-				logger.warn("Не удалось сгенерировать поздравление", { tgId: birthday.tgId });
-				continue;
-			}
-
-			// По прямому требованию — поздравление всегда в ОБЩИЙ чат, не в
+			// По прямому требованию — поздравление адресуется конкретному
+			// человеку упоминанием по id (text_mention работает даже без
+			// username, в отличие от @username-упоминания, и реально пингует
+			// человека, как обычный @-меншн) — а не просто безадресным
+			// текстом в чат. По прямому требованию — всегда в ОБЩИЙ чат, не в
 			// конкретную форум-тему, даже если человека чаще видели в
 			// какой-то отдельной теме (threadId в записи — чисто справочный).
-			await telegram.sendMessage(birthday.chatId, reply.text);
-
-			const costUsd = estimateCostUsd(reply.promptTokens, reply.completionTokens, aiConfig.providers[aiConfig.provider]);
-			await repos.aiUsage.record({
-				chatId: birthday.chatId,
-				// "0" — сообщение реально ушло в общий чат (см. sendMessage выше),
-				// не в birthday.threadId (тот чисто справочный).
-				threadId: "0",
-				kind: "birthday-congrats",
-				provider: aiConfig.provider,
-				promptText: prompt,
-				userContent: `Сегодня день рождения у ${birthday.firstName}.`,
-				replyText: reply.text,
-				promptTokens: reply.promptTokens,
-				completionTokens: reply.completionTokens,
-				costUsd,
+			const mentionLabel = birthday.firstName;
+			await telegram.sendMessage(birthday.chatId, `${mentionLabel}, ${text}`, {
+				entities: [{ type: "text_mention", offset: 0, length: mentionLabel.length, user: { id: Number(birthday.tgId), is_bot: false, first_name: birthday.firstName } }],
 			});
 
 			sentLog[birthday.tgId] = isoDate;
@@ -113,4 +135,15 @@ export async function runBirthdayCongratulations(repos: Repositories, telegram: 
 	}
 
 	await repos.settings.set(PART_ID, SENT_LOG_KEY, sentLog);
+}
+
+/**
+ * Кнопка "Тест" в панели — генерирует текст поздравления по текущему
+ * промпту для конкретного человека, но НЕ отправляет его в чат (и не
+ * трогает "уже поздравили сегодня" — реальный день рождения этим не
+ * помечается как отработанный). Реальный AI-вызов, расходует бюджет как
+ * обычно, только без sendMessage.
+ */
+export async function generateTestCongrats(repos: Repositories, logger: Logger, firstName: string, gender: Gender): Promise<string | null> {
+	return generateCongratsMessage(repos, logger, firstName, gender, "test");
 }

@@ -4,6 +4,7 @@ import type { Repositories } from "../../bot-part.ts";
 import type { Logger } from "../../logger/logger.ts";
 import { loadBirthdaysConfig, saveBirthdaysConfig } from "../../parts/birthdays/config.ts";
 import type { BirthdaysConfig } from "../../parts/birthdays/default-config.ts";
+import { generateTestCongrats } from "../../parts/birthdays/congratulate.ts";
 import { runBirthdayScan } from "../../parts/birthdays/scan.ts";
 
 const BIRTHDAY_RE = /^\d{2}\.\d{2}$/;
@@ -88,6 +89,27 @@ export function createBirthdaysRouter(repos: Repositories, logger: Logger, botId
 		const next: BirthdaysConfig = { ...current, ...patch };
 		await saveBirthdaysConfig(settings, next);
 		res.json(next);
+	});
+
+	/** Кнопка "Тест" в панели — генерирует текст поздравления по текущему промпту, не отправляя его в чат (реальный AI-вызов, расходует бюджет как обычно). Одна общая кнопка с произвольными именем/полом, не по кнопке на каждого из отслеживаемых участников. */
+	router.post("/test-congrats", async (req, res) => {
+		const { firstName, gender } = req.body as { firstName?: string; gender?: string | null };
+		if (!firstName?.trim()) {
+			res.status(400).json({ error: "Имя обязательно" });
+			return;
+		}
+		const genderResult = parseGender(gender ?? null);
+		if (!genderResult.ok) {
+			res.status(400).json({ error: 'Пол должен быть "male", "female" или пустым' });
+			return;
+		}
+
+		const text = await generateTestCongrats(repos, logger, firstName.trim(), genderResult.gender);
+		if (!text) {
+			res.status(500).json({ error: "AI не ответил — см. логи" });
+			return;
+		}
+		res.json({ text });
 	});
 
 	/** Ручной запуск скана прямо сейчас (не дожидаясь 48ч) — синхронно, чтобы панель могла показать "готово"/ошибку сразу. */
