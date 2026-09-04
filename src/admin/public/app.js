@@ -56,6 +56,10 @@ function loadTab(tab) {
 		loadMuteVoteConfig();
 		return loadVotes();
 	}
+	if (tab === "birthdays") {
+		loadBirthdaysConfig();
+		return loadBirthdays();
+	}
 	if (tab === "logs") return loadLogs();
 	if (tab === "accounts") return loadAccounts();
 }
@@ -70,7 +74,7 @@ async function loadTopics() {
 	tbody.innerHTML = "";
 	for (const chat of chats) {
 		tbody.appendChild(chatGroupRow(chat));
-		const topics = chat.topics.length > 0 ? chat.topics : [{ threadId: "0", topicName: null, aiJokesEnabled: false, muteVoteEnabled: false, yesNoEnabled: false }];
+		const topics = chat.topics.length > 0 ? chat.topics : [{ threadId: "0", topicName: null, aiJokesEnabled: false, muteVoteEnabled: false, yesNoEnabled: false, birthdaysEnabled: false }];
 		for (const topic of topics) {
 			const tr = topicRow(chat, topic, chat.topics.length === 0);
 			tr.hidden = true;
@@ -123,7 +127,7 @@ function chatGroupRow(chat) {
 	const tr = document.createElement("tr");
 	tr.className = "expandable-row chat-group-row";
 	const td = document.createElement("td");
-	td.colSpan = 4;
+	td.colSpan = 5;
 
 	const extras = [];
 	if (chat.cooldownRemainingMin > 0) extras.push(`кулдаун ещё ${chat.cooldownRemainingMin} мин`);
@@ -152,6 +156,7 @@ function topicRow(chat, topic, empty) {
 		<td></td>
 		<td></td>
 		<td></td>
+		<td></td>
 	`;
 	if (empty) {
 		tr.children[0].innerHTML += ' <span class="hint">ещё нет сообщений</span>';
@@ -160,6 +165,7 @@ function topicRow(chat, topic, empty) {
 	tr.children[1].appendChild(toggleSwitch(topic.aiJokesEnabled, (checked) => setTopicToggle(chat.chatId, topic.threadId, { aiJokesEnabled: checked })));
 	tr.children[2].appendChild(toggleSwitch(topic.yesNoEnabled, (checked) => setTopicToggle(chat.chatId, topic.threadId, { yesNoEnabled: checked })));
 	tr.children[3].appendChild(toggleSwitch(topic.muteVoteEnabled, (checked) => setTopicToggle(chat.chatId, topic.threadId, { muteVoteEnabled: checked })));
+	tr.children[4].appendChild(toggleSwitch(topic.birthdaysEnabled, (checked) => setTopicToggle(chat.chatId, topic.threadId, { birthdaysEnabled: checked })));
 	return tr;
 }
 
@@ -222,6 +228,38 @@ async function loadAiConfig() {
 	el("ai-yesno-prob").value = config.yesNoReplyProbability;
 	el("ai-yes").value = config.yesAnswers.join("\n");
 	el("ai-no").value = config.noAnswers.join("\n");
+
+	loadScenarioUsage();
+}
+
+// Небольшие таблички "сценарий → сколько раз выпал" по каждому тону —
+// контроль, что shuffle-bag (tone.ts) реально держит разброс использований
+// внутри тона не больше 1, а не просто "по задумке".
+const TONE_LABELS = { general: "general", targeted: "targeted", sarcasm: "sarcasm", praise: "praise" };
+
+async function loadScenarioUsage() {
+	const usage = await api("/scenario-usage");
+	const container = el("scenario-usage-content");
+	container.innerHTML = "";
+
+	for (const [tone, label] of Object.entries(TONE_LABELS)) {
+		const rows = usage[tone] ?? [];
+		if (rows.length === 0) continue;
+
+		const h4 = document.createElement("h4");
+		h4.textContent = label;
+		h4.style.marginBottom = "4px";
+		container.appendChild(h4);
+
+		const wrap = document.createElement("div");
+		wrap.className = "table-wrap";
+		const table = document.createElement("table");
+		table.innerHTML = `<thead><tr><th>Сценарий</th><th>Раз выпал</th></tr></thead><tbody>${rows
+			.map((r) => `<tr><td class="wrap">${escapeHtml(r.scenario)}</td><td>${r.count}</td></tr>`)
+			.join("")}</tbody>`;
+		wrap.appendChild(table);
+		container.appendChild(wrap);
+	}
 }
 
 el("ai-config-save").addEventListener("click", async () => {
@@ -454,6 +492,95 @@ async function loadVotes() {
 }
 
 el("votes-load").addEventListener("click", loadVotes);
+
+// ---- Дни рождения ----
+
+const GENDER_LABELS = { male: "муж", female: "жен", null: "—" };
+const BIRTHDAY_RE = /^\d{2}\.\d{2}$/;
+
+async function loadBirthdaysConfig() {
+	const config = await api("/birthdays/config");
+	el("bday-prompt").value = config.congratsPromptTemplate;
+}
+
+el("bday-config-save").addEventListener("click", async () => {
+	const status = el("bday-config-status");
+	status.textContent = "";
+	try {
+		await api("/birthdays/config", { method: "PUT", body: { congratsPromptTemplate: el("bday-prompt").value } });
+		status.textContent = "Сохранено";
+		setTimeout(() => (status.textContent = ""), 2000);
+	} catch (err) {
+		status.textContent = `Ошибка: ${err.message}`;
+	}
+});
+
+async function loadBirthdays() {
+	const people = await api("/birthdays");
+	const tbody = document.querySelector("#birthdays-table tbody");
+	tbody.innerHTML = "";
+
+	for (const person of people) {
+		const tr = document.createElement("tr");
+
+		const nameTd = document.createElement("td");
+		nameTd.textContent = person.firstName;
+		const usernameTd = document.createElement("td");
+		usernameTd.textContent = person.username ? `@${person.username}` : "—";
+		const genderTd = document.createElement("td");
+		genderTd.textContent = GENDER_LABELS[person.gender ?? "null"] ?? "—";
+
+		const birthdayTd = document.createElement("td");
+		const input = document.createElement("input");
+		input.type = "text";
+		input.placeholder = "ДД.ММ";
+		input.value = person.birthday ?? "";
+		input.style.width = "70px";
+		input.addEventListener("change", async () => {
+			const value = input.value.trim();
+			if (value && !BIRTHDAY_RE.test(value)) {
+				alert('Дата должна быть в формате "ДД.ММ", например 05.09');
+				input.value = person.birthday ?? "";
+				return;
+			}
+			try {
+				await api(`/birthdays/${person.tgId}`, { method: "PUT", body: { birthday: value } });
+				loadBirthdays();
+			} catch (err) {
+				alert(`Не удалось сохранить дату: ${err.message}`);
+				input.value = person.birthday ?? "";
+			}
+		});
+		birthdayTd.appendChild(input);
+
+		const sourceTd = document.createElement("td");
+		sourceTd.className = "hint";
+		sourceTd.textContent = person.source === "admin" ? "вручную" : person.source === "auto" ? "автоскан" : "—";
+
+		const chatTd = document.createElement("td");
+		chatTd.className = "hint";
+		chatTd.textContent = person.chatId;
+
+		const actionsTd = document.createElement("td");
+		const deleteBtn = document.createElement("button");
+		deleteBtn.type = "button";
+		deleteBtn.className = "danger";
+		deleteBtn.textContent = "Удалить";
+		deleteBtn.addEventListener("click", async () => {
+			if (!confirm(`Удалить ${person.firstName} из списка? (например, если человек вышел из чата)`)) return;
+			try {
+				await api(`/birthdays/${person.tgId}`, { method: "DELETE" });
+				loadBirthdays();
+			} catch (err) {
+				alert(`Не удалось удалить: ${err.message}`);
+			}
+		});
+		actionsTd.appendChild(deleteBtn);
+
+		tr.append(nameTd, usernameTd, genderTd, birthdayTd, sourceTd, chatTd, actionsTd);
+		tbody.appendChild(tr);
+	}
+}
 
 // ---- Логи ----
 

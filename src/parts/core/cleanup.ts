@@ -2,7 +2,13 @@ import type { MessagesRepository } from "../../db/repositories/messages-reposito
 import type { Logger } from "../../logger/logger.ts";
 
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // раз в час
-const MESSAGE_RETENTION_HOURS = 15; // порт utilSettings.deleteMessagesTimeInHours из старого police-clever
+// Было 15 (порт utilSettings.deleteMessagesTimeInHours из старого police-clever).
+// Увеличено до 60 (2.5 суток) под сканирование дней рождения (см.
+// parts/birthdays/scan.ts) — оно проходит раз в 48ч, и должно видеть ВСЕ
+// сообщения с прошлого раза, а не только последние 15 часов. Для AI-шуток
+// на объём context это не влияет — buildChatContext режет по количеству/
+// символам, а не по возрасту, старые сообщения просто не попадают в окно.
+const MESSAGE_RETENTION_HOURS = 60;
 
 /**
  * Почасовая чистка локального лога сообщений (порт

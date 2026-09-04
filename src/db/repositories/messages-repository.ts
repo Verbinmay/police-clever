@@ -1,5 +1,5 @@
 import type { DataSource } from "typeorm";
-import { LessThan } from "typeorm";
+import { LessThan, MoreThanOrEqual } from "typeorm";
 import { type Message, MessageSchema } from "../entities/Message.ts";
 
 export interface SaveMessageInput {
@@ -29,6 +29,14 @@ export class MessagesRepository {
 			take: n,
 		});
 		return rows.reverse();
+	}
+
+	/** Все сообщения темы с указанного момента, в хронологическом порядке — для скана дней рождения (parts/birthdays/scan.ts), в отличие от findLastNInThread не режет по количеству. */
+	async findSinceInThread(chatId: string, threadId: string, since: Date): Promise<Message[]> {
+		return this.repo.find({
+			where: { chatId, threadId, createdAt: MoreThanOrEqual(since) },
+			order: { createdAt: "ASC" },
+		});
 	}
 
 	/** Чистка старых сообщений — почасовой крон, лог не должен расти бесконечно. */

@@ -2,6 +2,7 @@ import type { Composer, Telegraf } from "telegraf";
 import type { DataSource } from "typeorm";
 import type { AdminAccountsRepository } from "./db/repositories/admin-accounts-repository.ts";
 import type { AiUsageRepository } from "./db/repositories/ai-usage-repository.ts";
+import type { BirthdaysRepository } from "./db/repositories/birthdays-repository.ts";
 import type { ChatsRepository } from "./db/repositories/chats-repository.ts";
 import type { LogsRepository } from "./db/repositories/logs-repository.ts";
 import type { MessagesRepository } from "./db/repositories/messages-repository.ts";
@@ -24,6 +25,7 @@ export interface Repositories {
 	logs: LogsRepository;
 	/** Суперадмин-аккаунты панели — частям бота не нужны, но живут в общем наборе репозиториев для единообразия с админкой. */
 	adminAccounts: AdminAccountsRepository;
+	birthdays: BirthdaysRepository;
 }
 
 export interface PartSetupContext {

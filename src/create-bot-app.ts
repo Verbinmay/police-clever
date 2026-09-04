@@ -5,6 +5,7 @@ import type { PartDefinition, Repositories } from "./bot-part.ts";
 import { createDataSource } from "./db/data-source.ts";
 import { AdminAccountsRepository } from "./db/repositories/admin-accounts-repository.ts";
 import { AiUsageRepository } from "./db/repositories/ai-usage-repository.ts";
+import { BirthdaysRepository } from "./db/repositories/birthdays-repository.ts";
 import { ChatsRepository } from "./db/repositories/chats-repository.ts";
 import { LogsRepository } from "./db/repositories/logs-repository.ts";
 import { MessagesRepository } from "./db/repositories/messages-repository.ts";
@@ -59,6 +60,7 @@ export function createBotApp(config: BotAppConfig): BotApp {
 		aiUsage: new AiUsageRepository(dataSource),
 		logs: logsRepository,
 		adminAccounts: new AdminAccountsRepository(dataSource),
+		birthdays: new BirthdaysRepository(dataSource),
 	};
 
 	const bot = new Telegraf<BotContext>(config.botToken);
