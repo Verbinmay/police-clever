@@ -9,11 +9,14 @@ import { displayName, getThreadId, getTopicName, isGroupChat } from "../../share
  * группы/супергруппы:
  *  1. Пассивно регистрирует Chat и Topic (аналог
  *     `topics-repository.ensureRegistered` из bots-platform) — по
- *     умолчанию оба тумблера темы выключены, бот молчит, пока superadmin
+ *     умолчанию все тумблеры темы выключены, бот молчит, пока superadmin
  *     не включит её в панели ("подчаты добавляются через админку").
  *  2. Обновляет BotUser (кто бота видел — для панели).
- *  3. Логирует текст в Message, но только если у темы включён хотя бы
- *     один из тумблеров — иначе выключенная тема не копит вообще ничего.
+ *  3. Логирует текст в Message, если у темы включён хотя бы один из её
+ *     тумблеров ИЛИ у чата целиком включён учёт дней рождения
+ *     (chat.birthdaysEnabled — единственный тумблер НЕ на тему, а на весь
+ *     чат: заставлять включать учёт в каждой из десятков форум-тем
+ *     отдельно было бы неюзабельно, см. Chat.birthdaysEnabled).
  *
  * Сообщения от других ботов игнорируются полностью (return без next()) —
  * Telegram доставляет сообщения ЛЮБЫХ ботов в общем чате (не только
@@ -44,7 +47,7 @@ export function createCorePart(): PartDefinition {
 				const chatId = String(chat.id);
 				const threadId = getThreadId(ctx);
 
-				await repos.chats.ensureRegistered({
+				const registeredChat = await repos.chats.ensureRegistered({
 					chatId,
 					title: "title" in chat ? (chat.title ?? null) : null,
 					isForum: "is_forum" in chat ? Boolean(chat.is_forum) : false,
@@ -54,7 +57,7 @@ export function createCorePart(): PartDefinition {
 				await repos.users.touch({ tgId: String(from.id), username: from.username ?? null, firstName: from.first_name ?? null });
 
 				const text = ctx.message && "text" in ctx.message ? ctx.message.text : undefined;
-				if (text && (topic.aiJokesEnabled || topic.muteVoteEnabled || topic.birthdaysEnabled)) {
+				if (text && (topic.aiJokesEnabled || topic.muteVoteEnabled || registeredChat.birthdaysEnabled)) {
 					await repos.messages.save({ chatId, threadId, tgId: String(from.id), fromName: displayName(from), text });
 				}
 

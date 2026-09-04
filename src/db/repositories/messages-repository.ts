@@ -31,10 +31,16 @@ export class MessagesRepository {
 		return rows.reverse();
 	}
 
-	/** Все сообщения темы с указанного момента, в хронологическом порядке — для скана дней рождения (parts/birthdays/scan.ts), в отличие от findLastNInThread не режет по количеству. */
-	async findSinceInThread(chatId: string, threadId: string, since: Date): Promise<Message[]> {
+	/**
+	 * Все сообщения ЧАТА (по всем его темам разом) с указанного момента, в
+	 * хронологическом порядке — для скана дней рождения
+	 * (parts/birthdays/scan.ts): тумблер учёта там на весь чат, а не на
+	 * отдельную тему (см. Chat.birthdaysEnabled), поэтому и скан читает
+	 * сразу весь чат одним запросом, а не по каждой теме отдельно.
+	 */
+	async findSinceInChat(chatId: string, since: Date): Promise<Message[]> {
 		return this.repo.find({
-			where: { chatId, threadId, createdAt: MoreThanOrEqual(since) },
+			where: { chatId, createdAt: MoreThanOrEqual(since) },
 			order: { createdAt: "ASC" },
 		});
 	}

@@ -20,6 +20,29 @@ function el(id) {
 	return document.getElementById(id);
 }
 
+// ---- Шаблон простой (нередактируемой, без кнопок/сворачивания) таблицы ----
+// columns: [{ label, className? }], rows: массив строк, каждая — массив
+// готовых HTML-ячеек (вызывающая сторона сама решает, экранировать ли —
+// см. escapeHtml). Рендерит table-wrap+table с нуля в контейнер, который
+// передали (контейнер целиком под таблицу — не подмешивайте туда другую
+// разметку). Не годится для таблиц с интерактивными строками (кнопки,
+// разворачивание по клику, тумблеры) — там своя разметка (см. votes/logs/
+// accounts/topics/ai-replies), это специально не унифицировано: общий
+// шаблон под кнопки/обработчики только усложнил бы код, а не сократил.
+function renderSimpleTable(container, columns, rows) {
+	container.innerHTML = "";
+	const wrap = document.createElement("div");
+	wrap.className = "table-wrap";
+	const table = document.createElement("table");
+	const thead = `<thead><tr>${columns.map((c) => `<th${c.className ? ` class="${c.className}"` : ""}>${c.label}</th>`).join("")}</tr></thead>`;
+	const tbody = `<tbody>${rows
+		.map((row) => `<tr>${row.map((cell, i) => `<td${columns[i]?.className ? ` class="${columns[i].className}"` : ""}>${cell}</td>`).join("")}</tr>`)
+		.join("")}</tbody>`;
+	table.innerHTML = thead + tbody;
+	wrap.appendChild(table);
+	container.appendChild(wrap);
+}
+
 function showLogin() {
 	el("login-view").hidden = false;
 	el("app-view").hidden = true;
@@ -74,7 +97,7 @@ async function loadTopics() {
 	tbody.innerHTML = "";
 	for (const chat of chats) {
 		tbody.appendChild(chatGroupRow(chat));
-		const topics = chat.topics.length > 0 ? chat.topics : [{ threadId: "0", topicName: null, aiJokesEnabled: false, muteVoteEnabled: false, yesNoEnabled: false, birthdaysEnabled: false }];
+		const topics = chat.topics.length > 0 ? chat.topics : [{ threadId: "0", topicName: null, aiJokesEnabled: false, muteVoteEnabled: false, yesNoEnabled: false }];
 		for (const topic of topics) {
 			const tr = topicRow(chat, topic, chat.topics.length === 0);
 			tr.hidden = true;
@@ -122,12 +145,14 @@ function renderGachaStatus(gacha) {
 // Заголовок группы — сам чат, кликабельный: разворачивает/сворачивает
 // список его тем (по умолчанию свёрнут, "выпадающий список"). Кулдаун и
 // дневной кап тоже общие на весь ЧАТ (не на тему) — показываем их тут же
-// в заголовке, а не повторяем в каждой строке темы.
+// в заголовке, а не повторяем в каждой строке темы. Тумблер "Дни рождения"
+// — туда же: он на весь чат целиком (см. Chat.birthdaysEnabled), а не на
+// отдельную тему, поэтому и живёт в заголовке чата, а не в колонке таблицы.
 function chatGroupRow(chat) {
 	const tr = document.createElement("tr");
 	tr.className = "expandable-row chat-group-row";
 	const td = document.createElement("td");
-	td.colSpan = 5;
+	td.colSpan = 4;
 
 	const extras = [];
 	if (chat.cooldownRemainingMin > 0) extras.push(`кулдаун ещё ${chat.cooldownRemainingMin} мин`);
@@ -135,6 +160,19 @@ function chatGroupRow(chat) {
 	const topicsCount = chat.topics.length > 0 ? `${chat.topics.length} ${chat.topics.length === 1 ? "тема" : "тем"}` : "тем ещё нет";
 
 	td.innerHTML = `<span class="chat-group-toggle">▶</span> <strong>${chat.title ?? "(без названия)"}</strong> <span class="hint">${chat.chatId} · ${topicsCount}${extras.length ? " · " + extras.join(" · ") : ""}</span>`;
+
+	const bdayWrap = document.createElement("span");
+	bdayWrap.className = "chat-group-birthdays";
+	bdayWrap.appendChild(toggleSwitch(chat.birthdaysEnabled, (checked) => setChatBirthdaysToggle(chat.chatId, checked)));
+	const bdayLabel = document.createElement("span");
+	bdayLabel.className = "hint";
+	bdayLabel.textContent = " Дни рождения (весь чат)";
+	bdayWrap.appendChild(bdayLabel);
+	// Клик по тумблеру не должен ещё и сворачивать/разворачивать строку —
+	// у самой tr свой обработчик клика ниже.
+	bdayWrap.addEventListener("click", (e) => e.stopPropagation());
+	td.appendChild(bdayWrap);
+
 	tr.appendChild(td);
 
 	tr.addEventListener("click", () => {
@@ -156,7 +194,6 @@ function topicRow(chat, topic, empty) {
 		<td></td>
 		<td></td>
 		<td></td>
-		<td></td>
 	`;
 	if (empty) {
 		tr.children[0].innerHTML += ' <span class="hint">ещё нет сообщений</span>';
@@ -165,7 +202,6 @@ function topicRow(chat, topic, empty) {
 	tr.children[1].appendChild(toggleSwitch(topic.aiJokesEnabled, (checked) => setTopicToggle(chat.chatId, topic.threadId, { aiJokesEnabled: checked })));
 	tr.children[2].appendChild(toggleSwitch(topic.yesNoEnabled, (checked) => setTopicToggle(chat.chatId, topic.threadId, { yesNoEnabled: checked })));
 	tr.children[3].appendChild(toggleSwitch(topic.muteVoteEnabled, (checked) => setTopicToggle(chat.chatId, topic.threadId, { muteVoteEnabled: checked })));
-	tr.children[4].appendChild(toggleSwitch(topic.birthdaysEnabled, (checked) => setTopicToggle(chat.chatId, topic.threadId, { birthdaysEnabled: checked })));
 	return tr;
 }
 
@@ -184,6 +220,10 @@ function toggleSwitch(checked, onChange) {
 
 async function setTopicToggle(chatId, threadId, patch) {
 	await api(`/topics/${chatId}/${threadId}`, { method: "PUT", body: patch });
+}
+
+async function setChatBirthdaysToggle(chatId, enabled) {
+	await api(`/topics/chat/${chatId}/birthdays`, { method: "PUT", body: { enabled } });
 }
 
 // ---- AI-конфиг ----
@@ -251,14 +291,16 @@ async function loadScenarioUsage() {
 		h4.style.marginBottom = "4px";
 		container.appendChild(h4);
 
-		const wrap = document.createElement("div");
-		wrap.className = "table-wrap";
-		const table = document.createElement("table");
-		table.innerHTML = `<thead><tr><th>Сценарий</th><th>Раз выпал</th></tr></thead><tbody>${rows
-			.map((r) => `<tr><td class="wrap">${escapeHtml(r.scenario)}</td><td>${r.count}</td></tr>`)
-			.join("")}</tbody>`;
-		wrap.appendChild(table);
-		container.appendChild(wrap);
+		const section = document.createElement("div");
+		container.appendChild(section);
+		renderSimpleTable(
+			section,
+			[
+				{ label: "Сценарий", className: "wrap" },
+				{ label: "Раз выпал", className: "num" },
+			],
+			rows.map((r) => [escapeHtml(r.scenario), r.count]),
+		);
 	}
 }
 
@@ -512,6 +554,27 @@ el("bday-config-save").addEventListener("click", async () => {
 		setTimeout(() => (status.textContent = ""), 2000);
 	} catch (err) {
 		status.textContent = `Ошибка: ${err.message}`;
+	}
+});
+
+// Фоновый скан идёт раз в 48ч сам по себе — кнопка нужна только чтобы не
+// ждать этот срок после первого включения тумблера в "Подчаты" (и вообще
+// для проверки, что всё работает). Синхронный запрос — скан обычно один
+// AI-вызов на чат, недолго.
+el("bday-scan-now").addEventListener("click", async () => {
+	const btn = el("bday-scan-now");
+	const status = el("bday-scan-status");
+	btn.disabled = true;
+	status.textContent = "Сканирую…";
+	try {
+		await api("/birthdays/scan", { method: "POST" });
+		status.textContent = "Готово";
+		await loadBirthdays();
+		setTimeout(() => (status.textContent = ""), 3000);
+	} catch (err) {
+		status.textContent = `Ошибка: ${err.message}`;
+	} finally {
+		btn.disabled = false;
 	}
 });
 

@@ -1,7 +1,7 @@
 import { config as appConfig } from "../../config.ts";
 import type { Repositories } from "../../bot-part.ts";
+import type { Chat } from "../../db/entities/Chat.ts";
 import type { Gender } from "../../db/entities/Birthday.ts";
-import type { Topic } from "../../db/entities/Topic.ts";
 import type { Logger } from "../../logger/logger.ts";
 import { createAiClient } from "../ai-fun/ai-client.ts";
 import { estimateCostUsd } from "../ai-fun/budget.ts";
@@ -11,11 +11,11 @@ import { apiKeyEnvVar, type ProviderId } from "../ai-fun/providers.ts";
 export const SCAN_INTERVAL_MS = 48 * 60 * 60 * 1000; // раз в двое суток, по прямому требованию
 const PART_ID = "birthdays";
 const LAST_SCAN_KEY = "lastScanAt";
-// Ограничения на размер промпта — участников в одной активной теме может
-// быть много, а с каждым скан-циклом нужен только "свежий" срез, не вся
-// история разом (см. MESSAGE_RETENTION_HOURS=60 в core/cleanup.ts — этого
-// хватает на покрытие одного 48-часового цикла с запасом).
-const MAX_USERS_PER_BATCH = 30;
+// Ограничения на размер промпта — тумблер теперь на весь чат (см.
+// Chat.birthdaysEnabled), а не на тему, так что в один скан может попасть
+// куда больше разных людей сразу (десяток форум-тем одного чата) — режем
+// не по темам, а по общему числу участников на чат за проход.
+const MAX_USERS_PER_BATCH = 40;
 const MAX_CHARS_PER_USER = 300;
 
 const API_KEYS: Record<ProviderId, string> = {
@@ -75,16 +75,18 @@ function buildPrompt(entries: ScanEntry[]): { system: string; user: string; keyB
 }
 
 /**
- * Один проход по всем темам с включённым тумблером birthdaysEnabled:
- * группирует сообщения по автору, спрашивает AI пол/дату рождения по
- * тексту, пишет через upsertAuto (который сам не трогает birthday,
- * заданный админом — см. birthdays-repository.ts). Раз в 48ч (см.
- * startBirthdayScanCron в index.ts).
+ * Один проход по всем ЧАТАМ с включённым тумблером birthdaysEnabled (см.
+ * Chat.birthdaysEnabled — он на весь чат, не на тему): группирует сообщения
+ * по автору сразу по всем темам чата, спрашивает AI пол/дату рождения по
+ * тексту, пишет через upsertAuto (который сам не трогает birthday, заданный
+ * админом — см. birthdays-repository.ts). Раз в 48ч (см.
+ * startBirthdayScanCron в index.ts) либо по кнопке "Сканировать сейчас" в
+ * панели (POST /api/birthdays/scan).
  */
 export async function runBirthdayScan(repos: Repositories, logger: Logger): Promise<void> {
-	const topics = await repos.topics.listAll();
-	const scanTopics = topics.filter((topic) => topic.birthdaysEnabled);
-	if (scanTopics.length === 0) return;
+	const chats = await repos.chats.listAll();
+	const scanChats = chats.filter((chat) => chat.birthdaysEnabled);
+	if (scanChats.length === 0) return;
 
 	const aiConfig = await loadAiConfig(repos.settings);
 	const apiKey = API_KEYS[aiConfig.provider];
@@ -97,28 +99,28 @@ export async function runBirthdayScan(repos: Repositories, logger: Logger): Prom
 	const lastScanAtRaw = await repos.settings.get<string | null>(PART_ID, LAST_SCAN_KEY, null);
 	const since = lastScanAtRaw ? new Date(lastScanAtRaw) : new Date(Date.now() - SCAN_INTERVAL_MS);
 
-	for (const topic of scanTopics) {
+	for (const chat of scanChats) {
 		try {
-			await scanOneTopic(repos, client, aiConfig.provider, aiConfig.providers[aiConfig.provider], topic, since, logger);
+			await scanOneChat(repos, client, aiConfig.provider, aiConfig.providers[aiConfig.provider], chat, since, logger);
 		} catch (err) {
-			logger.error("Ошибка скана дней рождения по теме", { chatId: topic.chatId, threadId: topic.threadId }, err);
+			logger.error("Ошибка скана дней рождения по чату", { chatId: chat.chatId }, err);
 		}
 	}
 
 	await repos.settings.set(PART_ID, LAST_SCAN_KEY, new Date().toISOString());
-	logger.info("Скан дней рождения завершён", { topics: scanTopics.length });
+	logger.info("Скан дней рождения завершён", { chats: scanChats.length });
 }
 
-async function scanOneTopic(
+async function scanOneChat(
 	repos: Repositories,
 	client: ReturnType<typeof createAiClient>,
 	provider: ProviderId,
 	providerConfig: Parameters<typeof estimateCostUsd>[2],
-	topic: Topic,
+	chat: Chat,
 	since: Date,
 	logger: Logger,
 ): Promise<void> {
-	const messages = await repos.messages.findSinceInThread(topic.chatId, topic.threadId, since);
+	const messages = await repos.messages.findSinceInChat(chat.chatId, since);
 	if (messages.length === 0) return;
 
 	const byUser = new Map<string, ScanEntry>();
@@ -138,20 +140,23 @@ async function scanOneTopic(
 	const usernameByTgId = new Map(users.map((user) => [user.tgId, user.username]));
 	for (const entry of byUser.values()) entry.username = usernameByTgId.get(entry.tgId) ?? null;
 
+	// Первые MAX_USERS_PER_BATCH встреченных (по времени первого сообщения
+	// в окне) — при большом чате остальные попадут в следующий проход через
+	// 48ч, не теряются насовсем, просто не все сразу.
 	const entries = Array.from(byUser.values()).slice(0, MAX_USERS_PER_BATCH);
 	if (entries.length === 0) return;
 
 	const { system, user, keyByTgId } = buildPrompt(entries);
-	const reply = await client.getReply(system, user, logger, 1200, { stripQuotes: false });
+	const reply = await client.getReply(system, user, logger, 1500, { stripQuotes: false });
 	if (!reply) {
-		logger.warn("Скан дней рождения: AI не ответил", { chatId: topic.chatId, threadId: topic.threadId });
+		logger.warn("Скан дней рождения: AI не ответил", { chatId: chat.chatId });
 		return;
 	}
 
 	const costUsd = estimateCostUsd(reply.promptTokens, reply.completionTokens, providerConfig);
 	await repos.aiUsage.record({
-		chatId: topic.chatId,
-		threadId: topic.threadId,
+		chatId: chat.chatId,
+		threadId: "0",
 		kind: "birthday-scan",
 		tone: null,
 		provider,
@@ -170,7 +175,7 @@ async function scanOneTopic(
 		const cleaned = reply.text.trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
 		parsed = JSON.parse(cleaned) as Record<string, ScanResultValue>;
 	} catch (err) {
-		logger.warn("Скан дней рождения: не удалось распарсить ответ AI", { chatId: topic.chatId, threadId: topic.threadId }, err);
+		logger.warn("Скан дней рождения: не удалось распарсить ответ AI", { chatId: chat.chatId }, err);
 		return;
 	}
 
@@ -183,8 +188,8 @@ async function scanOneTopic(
 			tgId,
 			firstName: entry.firstName,
 			username: entry.username,
-			chatId: topic.chatId,
-			threadId: topic.threadId,
+			chatId: chat.chatId,
+			threadId: "0",
 			gender: toGender(value?.gender),
 			birthday: toBirthday(value?.birthday),
 		});
