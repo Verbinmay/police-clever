@@ -7,6 +7,7 @@ import { config } from "../config.ts";
 import type { Logger } from "../logger/logger.ts";
 import { csrfOriginCheck } from "./auth.ts";
 import { bootstrapAdminAccount } from "./bootstrap.ts";
+import { apiRateLimit } from "./rate-limit.ts";
 import { requireSession } from "./require-session.ts";
 import { createAccountsRouter } from "./routes/accounts.ts";
 import { createAiConfigRouter } from "./routes/ai-config.ts";
@@ -55,6 +56,9 @@ export async function mountAdmin(app: Express, repos: Repositories, logger: Logg
 	schedulePruning(repos, logger);
 
 	app.use(csrfOriginCheck);
+	// Общий лимит на весь /api (включая вход) — до роутеров. У логина сверху
+	// ещё свои, гораздо более жёсткие лимиты (routes/auth.ts).
+	app.use("/api", apiRateLimit());
 	app.use("/api/auth", createAuthRouter(repos.adminAccounts));
 
 	app.use("/api/topics", requireSession, createTopicsRouter(repos.chats, repos.topics, repos.settings, repos.aiUsage));

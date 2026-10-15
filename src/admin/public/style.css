@@ -185,6 +185,59 @@ button.danger:hover:not(:disabled) { background: color-mix(in srgb, var(--danger
 .login-card input { width: 100%; margin-bottom: 10px; }
 .login-card button { width: 100%; }
 
+/* Уведомления вместо alert() — внизу экрана, сами исчезают (см. notify в app.js). */
+#toast-container {
+	position: fixed;
+	left: 50%;
+	bottom: 16px;
+	transform: translateX(-50%);
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	width: min(480px, calc(100vw - 32px));
+	z-index: 1000;
+}
+
+.toast {
+	display: flex;
+	align-items: flex-start;
+	gap: 12px;
+	padding: 12px 14px;
+	border-radius: 10px;
+	border: 1px solid var(--border);
+	background: var(--panel);
+	color: var(--text);
+	font-size: 14px;
+	box-shadow: 0 6px 24px rgb(0 0 0 / 0.25);
+}
+
+.toast-error { border-color: var(--danger); }
+.toast-ok { border-color: var(--ok); }
+
+.toast-close {
+	margin-left: auto;
+	padding: 0 6px;
+	border: none;
+	background: transparent;
+	color: var(--muted);
+	font-size: 18px;
+	line-height: 1;
+	cursor: pointer;
+}
+
+/* Подтверждение на месте кнопки вместо confirm() (см. confirmInline в app.js). */
+.inline-confirm {
+	display: inline-flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 6px;
+	font-size: 13px;
+}
+
+/* Поле с неверным значением (см. setFieldError в app.js). */
+input.invalid { border-color: var(--danger); outline-color: var(--danger); }
+.field-error { font-size: 12px; min-height: 0; margin-top: 4px; }
+
 [hidden] { display: none !important; }
 
 /* Мобильная адаптация. Точка перелома 640px — планшет/десктоп выше не трогаем. */

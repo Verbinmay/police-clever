@@ -20,6 +20,80 @@ function el(id) {
 	return document.getElementById(id);
 }
 
+// ---- Уведомления и подтверждения прямо в панели ----
+// Вместо браузерных alert()/confirm(): те блокируют страницу, выглядят
+// чужеродно и на телефоне легко пропускаются/закрываются случайно.
+
+// Короткое сообщение внизу экрана, само исчезает. kind: "error" | "ok".
+function notify(message, kind = "error") {
+	let box = el("toast-container");
+	if (!box) {
+		box = document.createElement("div");
+		box.id = "toast-container";
+		box.setAttribute("role", "status");
+		box.setAttribute("aria-live", "polite");
+		document.body.appendChild(box);
+	}
+	const toast = document.createElement("div");
+	toast.className = `toast toast-${kind}`;
+	toast.textContent = message;
+	const close = document.createElement("button");
+	close.type = "button";
+	close.className = "toast-close";
+	close.setAttribute("aria-label", "Закрыть");
+	close.textContent = "×";
+	close.addEventListener("click", () => toast.remove());
+	toast.appendChild(close);
+	box.appendChild(toast);
+	setTimeout(() => toast.remove(), kind === "error" ? 8000 : 3000);
+}
+
+// Подтверждение на месте кнопки: кнопка прячется, вместо неё — вопрос и
+// "Да"/"Отмена". onConfirm вызывается только по "Да".
+function confirmInline(button, question, onConfirm, confirmLabel = "Да") {
+	if (button.nextElementSibling?.classList.contains("inline-confirm")) return;
+	const wrap = document.createElement("span");
+	wrap.className = "inline-confirm";
+	const text = document.createElement("span");
+	text.textContent = question;
+	const yes = document.createElement("button");
+	yes.type = "button";
+	yes.className = "danger";
+	yes.textContent = confirmLabel;
+	const no = document.createElement("button");
+	no.type = "button";
+	no.textContent = "Отмена";
+	const restore = () => {
+		wrap.remove();
+		button.hidden = false;
+	};
+	yes.addEventListener("click", async () => {
+		yes.disabled = true;
+		no.disabled = true;
+		await onConfirm();
+		restore();
+	});
+	no.addEventListener("click", restore);
+	wrap.append(text, yes, no);
+	button.hidden = true;
+	button.after(wrap);
+	no.focus();
+}
+
+// Подсветка неверного значения в поле + текст под ним, без всплывающих окон.
+function setFieldError(input, message) {
+	let hint = input.nextElementSibling;
+	if (!hint || !hint.classList.contains("field-error")) {
+		hint = document.createElement("div");
+		hint.className = "field-error error-text";
+		input.after(hint);
+	}
+	hint.textContent = message ?? "";
+	input.classList.toggle("invalid", Boolean(message));
+	if (message) input.setAttribute("aria-invalid", "true");
+	else input.removeAttribute("aria-invalid");
+}
+
 // ---- Шаблон простой (нередактируемой, без кнопок/сворачивания) таблицы ----
 // columns: [{ label, className? }], rows: массив строк, каждая — массив
 // готовых HTML-ячеек (вызывающая сторона сама решает, экранировать ли —
@@ -134,7 +208,7 @@ function renderGachaStatus(gacha) {
 			await api("/topics/gacha-counter", { method: "PUT", body: { value: next } });
 			loadTopics();
 		} catch (err) {
-			alert(`Не удалось изменить счётчик: ${err.message}`);
+			notify(`Не удалось изменить счётчик: ${err.message}`);
 			input.value = gacha.counter;
 		}
 	});
@@ -542,7 +616,7 @@ async function loadVotes() {
 				await api(`/votes/${btn.dataset.unmute}/unmute`, { method: "POST" });
 				loadVotes();
 			} catch (err) {
-				alert(`Не удалось снять мьют: ${err.message}`);
+				notify(`Не удалось снять мьют: ${err.message}`);
 				btn.disabled = false;
 				btn.textContent = "Снять мьют";
 			}
@@ -551,15 +625,14 @@ async function loadVotes() {
 
 	tbody.querySelectorAll("button[data-dismiss]").forEach((btn) => {
 		btn.addEventListener("click", async () => {
-			if (!confirm("Убрать эту запись из списка? Реальный мьют (если он есть) это не тронет — только запись в панели.")) return;
-			btn.disabled = true;
-			try {
-				await api(`/votes/${btn.dataset.dismiss}/dismiss`, { method: "POST" });
-				loadVotes();
-			} catch (err) {
-				alert(`Не удалось убрать запись: ${err.message}`);
-				btn.disabled = false;
-			}
+			confirmInline(btn, "Убрать запись из списка? Сам мьют это не снимет.", async () => {
+				try {
+					await api(`/votes/${btn.dataset.dismiss}/dismiss`, { method: "POST" });
+					loadVotes();
+				} catch (err) {
+					notify(`Не удалось убрать запись: ${err.message}`);
+				}
+			}, "Убрать");
 		});
 	});
 }
@@ -719,7 +792,7 @@ async function loadBirthdays() {
 					await api(`/birthdays/${person.tgId}`, { method: "PUT", body: { gender: value } });
 					loadBirthdays();
 				} catch (err) {
-					alert(`Не удалось сохранить пол: ${err.message}`);
+					notify(`Не удалось сохранить пол: ${err.message}`);
 					loadBirthdays();
 				}
 			}),
@@ -728,22 +801,25 @@ async function loadBirthdays() {
 		const birthdayTd = document.createElement("td");
 		const input = document.createElement("input");
 		input.type = "text";
+		input.inputMode = "numeric";
+		input.maxLength = 5;
+		input.setAttribute("aria-label", `Дата рождения: ${person.firstName}`);
 		input.placeholder = "ДД.ММ";
 		input.value = person.birthday ?? "";
 		input.style.width = "70px";
 		input.addEventListener("change", async () => {
 			const value = input.value.trim();
 			if (value && !BIRTHDAY_RE.test(value)) {
-				alert('Дата должна быть в формате "ДД.ММ", например 05.09');
-				input.value = person.birthday ?? "";
+				setFieldError(input, "Формат ДД.ММ, например 05.09");
+				input.focus();
 				return;
 			}
+			setFieldError(input, null);
 			try {
 				await api(`/birthdays/${person.tgId}`, { method: "PUT", body: { birthday: value } });
 				loadBirthdays();
 			} catch (err) {
-				alert(`Не удалось сохранить дату: ${err.message}`);
-				input.value = person.birthday ?? "";
+				setFieldError(input, `Не сохранилось: ${err.message}`);
 			}
 		});
 		birthdayTd.appendChild(input);
@@ -762,14 +838,15 @@ async function loadBirthdays() {
 		deleteBtn.type = "button";
 		deleteBtn.className = "danger";
 		deleteBtn.textContent = "Удалить";
-		deleteBtn.addEventListener("click", async () => {
-			if (!confirm(`Удалить ${person.firstName} из списка? (например, если человек вышел из чата)`)) return;
-			try {
-				await api(`/birthdays/${person.tgId}`, { method: "DELETE" });
-				loadBirthdays();
-			} catch (err) {
-				alert(`Не удалось удалить: ${err.message}`);
-			}
+		deleteBtn.addEventListener("click", () => {
+			confirmInline(deleteBtn, `Удалить ${person.firstName}?`, async () => {
+				try {
+					await api(`/birthdays/${person.tgId}`, { method: "DELETE" });
+					loadBirthdays();
+				} catch (err) {
+					notify(`Не удалось удалить: ${err.message}`);
+				}
+			}, "Удалить");
 		});
 		actionsTd.appendChild(deleteBtn);
 

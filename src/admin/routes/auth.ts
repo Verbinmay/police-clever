@@ -1,23 +1,53 @@
 import argon2 from "argon2";
 import { Router } from "express";
+import { setTimeout as sleep } from "node:timers/promises";
 import type { AdminAccountsRepository } from "../../db/repositories/admin-accounts-repository.ts";
 import { config } from "../../config.ts";
-import { clearFailures, isLockedOut, loginClientKey, recordFailure } from "../auth.ts";
+import { clientIp, RateLimiter, sendTooManyRequests } from "../rate-limit.ts";
 import { readSessionAccountId, createSessionCookie, clearSessionCookie } from "../session.ts";
 
-/** Логин/логаут/"кто я" — единственные /api-маршруты панели, доступные без сессии. */
+const MINUTE = 60_000;
+/** Пауза перед ответом на неверный пароль — делает перебор медленным даже в пределах лимитов. */
+const FAILURE_DELAY_MS = 1000;
+
+/**
+ * Логин/логаут/"кто я" — единственные /api-маршруты панели, доступные без сессии.
+ *
+ * Лимиты на вход (все в памяти процесса, см. rate-limit.ts):
+ *  - любых попыток с одного IP — 10 за 15 минут;
+ *  - неудачных с одного IP — 5 за 15 минут;
+ *  - неудачных на один логин — 10 за час (перебор пароля конкретного
+ *    аккаунта с разных IP);
+ *  - неудачных всего, со всех IP — 30 за 15 минут (страховка от подмены
+ *    IP через заголовки в обход Cloudflare).
+ * Успешный вход сбрасывает счётчики неудач этого IP и логина.
+ */
 export function createAuthRouter(accounts: AdminAccountsRepository): Router {
 	const router = Router();
+	const attemptsPerIp = new RateLimiter(10, 15 * MINUTE);
+	const failuresPerIp = new RateLimiter(5, 15 * MINUTE);
+	const failuresPerUser = new RateLimiter(10, 60 * MINUTE);
+	const failuresGlobal = new RateLimiter(30, 15 * MINUTE);
 
 	router.post("/login", async (req, res) => {
-		const key = loginClientKey(req);
-		if (isLockedOut(key)) {
-			res.status(429).json({ error: "Слишком много неудачных попыток входа. Попробуйте позже." });
+		const ip = clientIp(req);
+		const rawUsername = (req.body as { username?: unknown }).username;
+		const userKey = typeof rawUsername === "string" ? rawUsername.trim().toLowerCase() : "";
+
+		const wait = Math.max(
+			attemptsPerIp.blockedFor(ip),
+			failuresPerIp.blockedFor(ip),
+			failuresGlobal.blockedFor("all"),
+			userKey ? failuresPerUser.blockedFor(userKey) : 0,
+		);
+		if (wait > 0) {
+			sendTooManyRequests(res, wait, "Слишком много попыток входа.");
 			return;
 		}
+		attemptsPerIp.hit(ip);
 
 		const { username, password } = req.body as { username?: string; password?: string };
-		if (!username || !password) {
+		if (typeof username !== "string" || typeof password !== "string" || !username || !password) {
 			res.status(400).json({ error: "Укажите логин и пароль" });
 			return;
 		}
@@ -25,12 +55,16 @@ export function createAuthRouter(accounts: AdminAccountsRepository): Router {
 		const account = await accounts.findByUsername(username);
 		const valid = account ? await argon2.verify(account.passwordHash, password).catch(() => false) : false;
 		if (!account || !valid) {
-			recordFailure(key);
+			failuresPerIp.hit(ip);
+			failuresGlobal.hit("all");
+			if (userKey) failuresPerUser.hit(userKey);
+			await sleep(FAILURE_DELAY_MS);
 			res.status(401).json({ error: "Неверный логин или пароль" });
 			return;
 		}
 
-		clearFailures(key);
+		failuresPerIp.reset(ip);
+		if (userKey) failuresPerUser.reset(userKey);
 		res.setHeader("Set-Cookie", createSessionCookie(account.id, config.SESSION_SECRET));
 		res.json({ ok: true, username: account.username });
 	});
