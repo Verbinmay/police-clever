@@ -34,12 +34,25 @@ export interface AiReply {
  * (формат, который DeepSeek поддерживает поверх OpenAI-совместимого
  * протокола; для остальных провайдеров поле не отправляется).
  *
- * OpenAI: та же болезнь у gpt-5-mini — по умолчанию reasoning-модель,
+ * OpenAI: та же болезнь у gpt-5-mini (и gpt-6-luna) — по умолчанию reasoning-модель,
  * при maxTokens=130 весь бюджет уходит в reasoning_tokens, content
  * приходит пустым (finish_reason: "length"), проверено вживую. Лечится
- * тем же способом — reasoning_effort: "minimal" (0 reasoning-токенов,
- * реальный content, finish_reason: "stop").
+ * тем же способом — reasoning_effort "minimal"/"none" в зависимости от
+ * модели (0 reasoning-токенов, реальный content, finish_reason: "stop"),
+ * см. openAiNoReasoningEffort.
  */
+/**
+ * Значение reasoning_effort "без рассуждений" у моделей OpenAI разное:
+ * семейство gpt-5 (mini/nano) понимает только "minimal", а более новые
+ * (gpt-5.6-luna, gpt-6-luna и т.д.) — только "none", на "minimal" отвечают
+ * 400-й ошибкой (проверено вживую 2026-10-15). Выбираем по имени модели, а
+ * не полем в конфиге: панель сохраняет провайдеров фиксированным набором
+ * полей, и лишнее поле пропало бы при первом же сохранении.
+ */
+export function openAiNoReasoningEffort(model: string): "minimal" | "none" {
+	return /^gpt-5(-mini|-nano)?$/.test(model) ? "minimal" : "none";
+}
+
 export function createAiClient(provider: ProviderModelConfig, apiKey: string, providerId: ProviderId) {
 	const openai = new OpenAI({ baseURL: provider.baseUrl, apiKey, maxRetries: 4 });
 
@@ -77,7 +90,7 @@ export function createAiClient(provider: ProviderModelConfig, apiKey: string, pr
 					}
 					// Поля не из типов openai SDK — специфика провайдеров, шлём как есть поверх типизированного вызова.
 					if (providerId === "deepseek") params.thinking = { type: "disabled" };
-					if (providerId === "openai") params.reasoning_effort = "minimal";
+					if (providerId === "openai") params.reasoning_effort = openAiNoReasoningEffort(provider.model);
 
 					const response = await openai.chat.completions.create(params as unknown as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming);
 					const text = response.choices[0]?.message?.content;

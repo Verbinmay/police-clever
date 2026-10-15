@@ -30,16 +30,21 @@ export const DEFAULT_PROVIDERS: Record<ProviderId, ProviderModelConfig> = {
 		baseUrl: "https://api.deepseek.com",
 		// deepseek-chat — легаси-алиас, DeepSeek отключил его 24 июля 2026.
 		model: "deepseek-v4-flash",
-		// Off-peak, cache-miss — см. память ai-provider-cost-comparison.
-		inputPricePerMTok: 0.22,
-		outputPricePerMTok: 0.66,
+		// С 10.09.2026 это имя обслуживает DeepSeek-V4.1-Flash. Цена — пиковая
+		// (cache-miss): off-peak вдвое дешевле, но месячный $-лимит должен
+		// считать с запасом, а не занижать (было 0.22/0.66 — ниже пика).
+		inputPricePerMTok: 0.3,
+		outputPricePerMTok: 1.2,
 	},
 	openai: {
 		label: "OpenAI",
 		baseUrl: "https://api.openai.com/v1",
-		model: "gpt-5-mini",
-		inputPricePerMTok: 0.25,
-		outputPricePerMTok: 2.0,
+		// Выбрана слепым тестом 2026-10-15 на реальных репликах чата (лучше
+		// DeepSeek Flash, GPT-5.6 Luna и GPT-5-nano) и дешевле их всех,
+		// кроме nano.
+		model: "gpt-6-luna",
+		inputPricePerMTok: 0.1,
+		outputPricePerMTok: 0.5,
 	},
 };
 
