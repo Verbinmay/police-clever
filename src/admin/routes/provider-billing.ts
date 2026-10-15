@@ -2,7 +2,7 @@ import { Router } from "express";
 import { config } from "../../config.ts";
 import type { Logger } from "../../logger/logger.ts";
 
-const CACHE_MS = 5 * 60 * 1000;
+const CACHE_MS = 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 10_000;
 
 type DeepSeekBilling =
@@ -107,8 +107,8 @@ async function fetchOpenAi(): Promise<OpenAiBilling> {
 /**
  * Реальное состояние счетов у провайдеров — в отличие от "Бюджета" в той же
  * вкладке, который считается ботом по оценочным ценам (budget.ts). Кэш на
- * 5 минут: панель могут обновлять часто, а провайдеров дёргать незачем;
- * ?refresh=1 — принудительно.
+ * час: панель могут обновлять часто, а провайдеров дёргать незачем;
+ * ?refresh=1 (кнопка "Обновить сейчас") — принудительно, мимо кэша.
  */
 export function createProviderBillingRouter(logger: Logger): Router {
 	const router = Router();
