@@ -17,6 +17,7 @@ import { createBirthdaysRouter } from "./routes/birthdays.ts";
 import { createConfigTransferRouter } from "./routes/config-transfer.ts";
 import { createLogsRouter } from "./routes/logs.ts";
 import { createMuteVoteConfigRouter } from "./routes/mutevote-config.ts";
+import { createProviderBillingRouter } from "./routes/provider-billing.ts";
 import { createScenarioUsageRouter } from "./routes/scenario-usage.ts";
 import { createTopicsRouter } from "./routes/topics.ts";
 import { createVotesRouter } from "./routes/votes.ts";
@@ -61,6 +62,7 @@ export async function mountAdmin(app: Express, repos: Repositories, logger: Logg
 	app.use("/api/ai-replies", requireSession, createAiRepliesRouter(repos.aiUsage));
 	app.use("/api/mutevote-config", requireSession, createMuteVoteConfigRouter(repos.settings));
 	app.use("/api/ai-stats", requireSession, createAiStatsRouter(repos.aiUsage, repos.settings));
+	app.use("/api/provider-billing", requireSession, createProviderBillingRouter(logger));
 	app.use("/api/scenario-usage", requireSession, createScenarioUsageRouter(repos.settings));
 	app.use("/api/birthdays", requireSession, createBirthdaysRouter(repos, logger, botId, telegram));
 	app.use("/api/votes", requireSession, createVotesRouter(repos.muteVotes, repos.topics, telegram, logger));

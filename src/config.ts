@@ -39,4 +39,11 @@ export const config = {
 	// заполненными и переключаться туда-обратно одним селектом в админке.
 	DEEPSEEK_API_KEY: env.get("DEEPSEEK_API_KEY").default("").asString(),
 	OPENAI_API_KEY: env.get("OPENAI_API_KEY").default("").asString(),
+	/**
+	 * Админ-ключ OpenAI (sk-admin-…) — только чтобы показывать в панели
+	 * реальные расходы организации (обычный ключ бота на это прав не имеет).
+	 * Опционален: без него карточка в панели просто подскажет, как его
+	 * добавить. Как получить и обновить — см. README, "Ключи и баланс".
+	 */
+	OPENAI_ADMIN_KEY: env.get("OPENAI_ADMIN_KEY").default("").asString(),
 };

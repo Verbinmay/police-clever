@@ -369,7 +369,44 @@ function formatLatency(ms) {
 	return ms ? `${(ms / 1000).toFixed(1)} с` : "—";
 }
 
+async function loadProviderBilling(refresh = false) {
+	const box = el("provider-billing-content");
+	box.textContent = "Загрузка…";
+	try {
+		const { deepseek, openai, fetchedAt } = await api(`/provider-billing${refresh ? "?refresh=1" : ""}`);
+		const parts = [];
+
+		if (!deepseek.configured) {
+			parts.push("<p><strong>DeepSeek:</strong> ключ DEEPSEEK_API_KEY не задан.</p>");
+		} else if (deepseek.error) {
+			parts.push(`<p><strong>DeepSeek:</strong> <span class="error-text">ошибка — ${escapeHtml(deepseek.error)}</span></p>`);
+		} else {
+			const b = deepseek.balances.map((x) => `${x.total.toFixed(2)} ${escapeHtml(x.currency)}`).join(", ") || "0";
+			parts.push(`<p><strong>DeepSeek:</strong> остаток на счёте <strong>${b}</strong>${deepseek.available ? "" : ' — <span class="error-text">баланса не хватает для запросов</span>'}</p>`);
+		}
+
+		if (!openai.configured) {
+			parts.push('<p><strong>OpenAI:</strong> расходы не видны — нужен админ-ключ OPENAI_ADMIN_KEY (инструкция в README, раздел «Ключи и баланс»). Остаток на счёте OpenAI через API не отдаёт вообще — только в кабинете.</p>');
+		} else if (openai.error) {
+			parts.push(`<p><strong>OpenAI:</strong> <span class="error-text">ошибка — ${escapeHtml(openai.error)}</span> (если 401/403 — админ-ключ отозван или неверный, создайте новый по инструкции в README)</p>`);
+		} else {
+			parts.push(`<p><strong>OpenAI:</strong> расходы за этот месяц <strong>${formatUsd(openai.monthCostUsd)}</strong>, сегодня ${formatUsd(openai.todayCostUsd)}. Остаток на счёте — только в кабинете OpenAI.</p>`);
+			if (openai.byProject.length > 1) {
+				parts.push(`<p class="hint">По проектам: ${openai.byProject.map((p) => `${escapeHtml(p.project)} — ${formatUsd(p.costUsd)}`).join("; ")}</p>`);
+			}
+		}
+
+		parts.push(`<p class="hint">Данные на ${new Date(fetchedAt).toLocaleString("ru-RU")}</p>`);
+		box.innerHTML = parts.join("");
+	} catch (err) {
+		box.textContent = `Ошибка: ${err.message}`;
+	}
+}
+
+el("provider-billing-refresh").addEventListener("click", () => loadProviderBilling(true));
+
 async function loadAiStats() {
+	loadProviderBilling();
 	const { daily, byChat, scenarios, budget } = await api("/ai-stats");
 
 	el("budget-provider").textContent = budget.provider;

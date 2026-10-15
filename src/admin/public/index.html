@@ -176,6 +176,13 @@
 			</section>
 
 			<section id="tab-ai-stats" class="tab-panel">
+				<div class="card" id="provider-billing-card">
+					<h3>Счета у провайдеров</h3>
+					<p class="hint">Реальные данные из кабинетов DeepSeek и OpenAI (обновляются раз в 5 минут). Блок «Бюджет» ниже — это оценка самого бота по ценам из конфига.</p>
+					<div id="provider-billing-content">—</div>
+					<button type="button" id="provider-billing-refresh">Обновить</button>
+				</div>
+
 				<div class="card" id="ai-budget-card">
 					<h3>Бюджет</h3>
 					<p>Провайдер: <strong id="budget-provider">—</strong></p>
