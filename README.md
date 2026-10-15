@@ -59,69 +59,95 @@ Telegraf-бот на вебхуке + Express + TypeORM + встроенная �
 
 ## Ключи и баланс
 
-В панели, вкладка «Статистика AI», карточка «Счета у провайдеров»
-показывает реальные данные из кабинетов (не оценку бота):
+Боту нужны **два разных ключа OpenAI**. Это не замена одного другим, оба
+лежат в `~/police-clever/.env` на VPS одновременно:
 
-- **DeepSeek** — остаток на счёте. Работает сам по обычному
-  `DEEPSEEK_API_KEY`, делать ничего не нужно.
-- **OpenAI** — расходы за месяц и за сегодня. Обычный ключ бота
-  (`OPENAI_API_KEY`, `sk-proj-…`) прав на это не имеет, нужен отдельный
-  **админ-ключ** `OPENAI_ADMIN_KEY` (`sk-admin-…`). Остаток на счёте
-  OpenAI через API не отдаёт вообще — его видно только в кабинете
-  (Settings → Billing).
+| Переменная | Вид ключа | Зачем | Где создать |
+|---|---|---|---|
+| `OPENAI_API_KEY` | `sk-proj-…` | бот генерирует ответы (GPT-6 Luna) | [API keys](https://platform.openai.com/api-keys) |
+| `OPENAI_ADMIN_KEY` | `sk-admin-…` | панель показывает расходы OpenAI | [Admin keys](https://platform.openai.com/settings/organization/admin-keys) |
+| `DEEPSEEK_API_KEY` | `sk-…` | запасной провайдер + баланс DeepSeek в панели | [DeepSeek API keys](https://platform.deepseek.com/api_keys) |
 
-### Как получить админ-ключ OpenAI
+Админ-ключ не умеет генерировать ответы, а обычный ключ не видит расходы.
+Если поставить админ-ключ вместо `OPENAI_API_KEY`, бот замолчит. Остаток
+денег на счёте OpenAI по API не отдаёт вообще: он только в кабинете,
+[Billing](https://platform.openai.com/settings/organization/billing/overview).
 
-1. Войдите на [platform.openai.com](https://platform.openai.com) под
-   аккаунтом-**владельцем** (роль Owner) организации, в которой создан ключ
-   бота. Админ-ключи может создавать только владелец — если раздела из
-   шага 2 не видно, у аккаунта не та роль.
-2. Откройте Settings → Organization → **Admin keys**
-   ([прямая ссылка](https://platform.openai.com/settings/organization/admin-keys)).
-3. Нажмите «Create new admin key», назовите, например, `revan-billing`.
-   Если предлагают выбрать права — выберите только чтение (Read only):
-   панели больше ничего не нужно.
+### 1. Ключ для ответов бота (`OPENAI_API_KEY`)
+
+1. Откройте [platform.openai.com/api-keys](https://platform.openai.com/api-keys).
+2. «Create new secret key» → Owned by: **You** (или Service account) →
+   Project: проект бота → имя, например `revan-bot`.
+3. Permissions: **All**, либо **Restricted** с правом **Write** на
+   «Model capabilities» (Chat completions). Больше боту ничего не нужно.
+4. Скопируйте ключ `sk-proj-…` — он показывается один раз.
+
+### 2. Админ-ключ для расходов (`OPENAI_ADMIN_KEY`)
+
+1. Войдите под аккаунтом-**владельцем** организации (роль Owner): только
+   он может создавать админ-ключи. Если страницы из шага 2 не видно —
+   у аккаунта не та роль.
+2. Откройте [Settings → Organization → Admin keys](https://platform.openai.com/settings/organization/admin-keys).
+3. «Create new admin key», имя `revan-billing`. Если предлагают выбрать
+   права — **Read only**.
 4. Скопируйте ключ `sk-admin-…` — он показывается один раз.
 
-Админ-ключ даёт доступ ко всей организации. Храните его только в `.env`
-на VPS: не коммитьте (`*env*` уже в `.gitignore`) и не пересылайте в
-чаты/мессенджеры.
+Админ-ключ даёт доступ ко всей организации: храните его только в `.env`
+на VPS, не коммитьте (`*env*` уже в `.gitignore`) и не пересылайте в чаты.
 
-### Как положить его на VPS (и как обновить)
+### 3. Записать ключ на VPS
 
-Добавить впервые или заменить старый — одно и то же:
+Каждая команда спрашивает ключ скрытым вводом (на экране и в истории
+терминала его не будет) и записывает его отдельной строкой в
+`~/police-clever/.env`, заменяя старое значение этой переменной.
 
-```bash
-ssh vps
-nano ~/police-clever/.env
-```
-
-В файле добавьте (или замените) строку:
-
-```
-OPENAI_ADMIN_KEY=sk-admin-...
-```
-
-Сохраните (в nano: Ctrl+O, Enter, Ctrl+X) и перезапустите бота, чтобы он
-перечитал `.env`:
+Ключ для ответов:
 
 ```bash
-cd ~/police-clever && docker compose -f docker-compose.prod.yml up -d --force-recreate
+ssh -t vps 'read -rsp "Вставьте ключ sk-proj-...: " K; echo; sed -i "/^OPENAI_API_KEY=/d" ~/police-clever/.env; printf "OPENAI_API_KEY=%s\n" "$K" >> ~/police-clever/.env; echo "OK"'
 ```
 
-Проверка: панель → «Статистика AI» → «Счета у провайдеров» → «Обновить сейчас».
-Должны появиться расходы OpenAI за месяц. Ошибка 401/403 означает, что
-ключ неверный или отозван.
+Админ-ключ:
 
-**Замена ключа** (по расписанию или при подозрении на утечку): создайте
-новый ключ (шаги выше), замените строку в `.env`, перезапустите бота той
-же командой, проверьте карточку. После этого удалите старый ключ на
-странице Admin keys. Если ключ утёк — сначала удалите его там, потом
-делайте новый.
+```bash
+ssh -t vps 'read -rsp "Вставьте ключ sk-admin-...: " K; echo; sed -i "/^OPENAI_ADMIN_KEY=/d" ~/police-clever/.env; printf "OPENAI_ADMIN_KEY=%s\n" "$K" >> ~/police-clever/.env; echo "OK"'
+```
 
-Тот же порядок (заменить строку в `~/police-clever/.env` →
-`up -d --force-recreate`) работает и для `DEEPSEEK_API_KEY` и
-`OPENAI_API_KEY`.
+Ключ DeepSeek — так же, с `DEEPSEEK_API_KEY`.
+
+### 4. Перезапустить бота
+
+Бот читает `.env` только при старте, поэтому после любой замены ключа:
+
+```bash
+ssh vps 'cd ~/police-clever && docker compose -f docker-compose.prod.yml up -d --force-recreate'
+```
+
+### 5. Проверить
+
+- Какие ключи бот видит (только начало ключа, не весь):
+
+```bash
+ssh vps 'docker exec police-clever-bot env | grep -E "^(OPENAI_API_KEY|OPENAI_ADMIN_KEY|DEEPSEEK_API_KEY)=" | sed -E "s/(=.{9}).*/\1…/"'
+```
+
+  Должны быть три строки: `OPENAI_API_KEY=sk-proj-…`, `OPENAI_ADMIN_KEY=sk-admin…`,
+  `DEEPSEEK_API_KEY=sk-…`. Нет строки `OPENAI_ADMIN_KEY` — ключ не записан
+  или бот не перезапущен (шаги 3–4).
+- Панель → «Статистика AI» → «Счета у провайдеров» → «Обновить сейчас»:
+  появятся расходы OpenAI за месяц. Ошибка 401/403 — ключ неверный или
+  отозван.
+- Бот отвечает в чате как раньше (новый `OPENAI_API_KEY` работает).
+
+### 6. Отозвать старый ключ
+
+Только после проверки удалите старый ключ на той же странице, где
+создавали новый ([API keys](https://platform.openai.com/api-keys) или
+[Admin keys](https://platform.openai.com/settings/organization/admin-keys)).
+Если ключ утёк — наоборот: сначала удалите его там, потом делайте новый.
+
+Локальный `.env.prod` на сервер не загружается и боту не нужен; если
+держите его как копию, обновите и там.
 
 ## Запуск локально
 
