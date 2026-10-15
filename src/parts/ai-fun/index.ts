@@ -15,6 +15,7 @@ import type { AiConfig } from "./default-config.ts";
 import { apiKeyEnvVar, type ProviderId } from "./providers.ts";
 import { resetGachaCounter, rollGacha } from "./gacha.ts";
 import { pickAction } from "./scenario.ts";
+import { matchTrigger } from "./trigger.ts";
 import { getRandomStickerFileId } from "./stickers.ts";
 
 function toThreadIdParam(threadId: string): number | undefined {
@@ -24,16 +25,6 @@ function toThreadIdParam(threadId: string): number | undefined {
 function pickRandom<T>(items: T[]): T {
 	// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
 	return items[Math.floor(Math.random() * items.length)]!;
-}
-
-const FILLER_WORDS = new Set(["эй", "ну", "слышь", "алло", "ало", "ау", "ой", "так", "вот"]);
-
-/** Есть ли в тексте обращения что-то кроме самого имени и междометий — тогда отвечаем по существу. */
-function hasMeaningfulWords(text: string): boolean {
-	return text
-		.toLowerCase()
-		.split(/[^\p{L}\p{N}]+/u)
-		.some((word) => word.length >= 3 && !FILLER_WORDS.has(word));
 }
 
 const API_KEYS: Record<ProviderId, string> = {
@@ -157,9 +148,9 @@ export function createAiFunPart(): PartDefinition {
 
 				const aiClient = getClient(config, config.provider);
 
-				// Регистронезависимо — "Реван"/"реван"/"РЕВАН" все должны срабатывать одинаково.
-				const lowerText = text.toLowerCase();
-				const isTriggered = config.triggerWords.some((word) => word && lowerText.includes(word.toLowerCase()));
+				// Имя бота в любом падеже и регистре ("Реню позовите", "РЕВАН") — см. trigger.ts.
+				const trigger = matchTrigger(text, config.triggerWords);
+				const isTriggered = trigger.isTriggered;
 				// Вызов по имени сбрасывает общий счётчик гачи наравне с пассивным
 				// выигрышем — иначе счётчик тикает сам по себе, и "гарантированный"
 				// ответ может выпасть почти сразу после того, как бота уже позвали
@@ -226,19 +217,9 @@ export function createAiFunPart(): PartDefinition {
 
 					// Голое обращение ("Реня" без ничего ещё) не даёт модели ничего,
 					// к чему привязать "ответь по существу" — кроме случая, когда это
-					// реплай (тогда цитата и есть содержание). Раньше порог был 12
-					// символов, и короткие, но содержательные обращения ("Реня
-					// манда", "Реня ты где") уходили в ветку "позвали без повода" —
-					// бот отвечал мимо сказанного. Теперь содержание — любое слово
-					// из 3+ букв после вычета имени, кроме пустых междометий.
-					const strippedText = config.triggerWords
-						.reduce((acc, word) => {
-							if (!word) return acc;
-							const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-							return acc.replace(new RegExp(escaped, "gi"), "");
-						}, text)
-						.trim();
-					const hasRealContent = hasMeaningfulWords(strippedText) || Boolean(quotedText);
+					// реплай (тогда цитата и есть содержание). Содержание — любое
+					// слово из 3+ букв, кроме имени (в любой форме) и междометий.
+					const hasRealContent = trigger.hasMeaningfulWords || Boolean(quotedText);
 
 					const action = isTriggered
 						? hasRealContent
