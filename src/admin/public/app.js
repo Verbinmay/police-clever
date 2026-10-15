@@ -641,7 +641,16 @@ el("votes-load").addEventListener("click", loadVotes);
 
 // ---- Дни рождения ----
 
-const BIRTHDAY_RE = /^\d{2}\.\d{2}$/;
+// Та же проверка, что на сервере (shared/day-month.ts): формат ДД.ММ и
+// реальные день/месяц, 29.02 допустимо.
+const DAYS_IN_MONTH = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+function isValidDayMonth(value) {
+	const match = /^(\d{2})\.(\d{2})$/.exec(value);
+	if (!match) return false;
+	const day = Number(match[1]);
+	const month = Number(match[2]);
+	return month >= 1 && month <= 12 && day >= 1 && day <= DAYS_IN_MONTH[month - 1];
+}
 
 async function loadBirthdaysConfig() {
 	const config = await api("/birthdays/config");
@@ -809,8 +818,8 @@ async function loadBirthdays() {
 		input.style.width = "70px";
 		input.addEventListener("change", async () => {
 			const value = input.value.trim();
-			if (value && !BIRTHDAY_RE.test(value)) {
-				setFieldError(input, "Формат ДД.ММ, например 05.09");
+			if (value && !isValidDayMonth(value)) {
+				setFieldError(input, "Нужна реальная дата ДД.ММ, например 05.09");
 				input.focus();
 				return;
 			}

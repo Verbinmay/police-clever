@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router } from "../async-router.ts";
 import { config } from "../../config.ts";
 import type { Logger } from "../../logger/logger.ts";
 

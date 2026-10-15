@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router } from "../async-router.ts";
 import type { Telegram } from "telegraf";
 import type { Repositories } from "../../bot-part.ts";
 import type { Logger } from "../../logger/logger.ts";
@@ -6,8 +6,8 @@ import { loadBirthdaysConfig, saveBirthdaysConfig } from "../../parts/birthdays/
 import type { BirthdaysConfig } from "../../parts/birthdays/default-config.ts";
 import { generateTestCongrats } from "../../parts/birthdays/congratulate.ts";
 import { runBirthdayScan } from "../../parts/birthdays/scan.ts";
+import { isValidDayMonth } from "../../shared/day-month.ts";
 
-const BIRTHDAY_RE = /^\d{2}\.\d{2}$/;
 
 function parseGender(value: unknown): { ok: true; gender: "male" | "female" | null } | { ok: false } {
 	if (value === "male" || value === "female" || value === null || value === "") return { ok: true, gender: value || null };
@@ -61,8 +61,8 @@ export function createBirthdaysRouter(repos: Repositories, logger: Logger, botId
 			return;
 		}
 		const birthdayValue = (birthday ?? "").trim();
-		if (birthdayValue && !BIRTHDAY_RE.test(birthdayValue)) {
-			res.status(400).json({ error: 'Дата должна быть в формате "ДД.ММ" или пустой' });
+		if (birthdayValue && !isValidDayMonth(birthdayValue)) {
+			res.status(400).json({ error: 'Дата должна быть реальной в формате "ДД.ММ" (например 05.09) или пустой' });
 			return;
 		}
 
@@ -141,8 +141,8 @@ export function createBirthdaysRouter(repos: Repositories, logger: Logger, botId
 		let updated = null;
 		if (birthday !== undefined) {
 			const value = birthday.trim();
-			if (value && !BIRTHDAY_RE.test(value)) {
-				res.status(400).json({ error: 'Дата должна быть в формате "ДД.ММ" или пустой' });
+			if (value && !isValidDayMonth(value)) {
+				res.status(400).json({ error: 'Дата должна быть реальной в формате "ДД.ММ" (например 05.09) или пустой' });
 				return;
 			}
 			updated = await birthdays.setAdminBirthday(tgId, value || null);

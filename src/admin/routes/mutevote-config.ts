@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router } from "../async-router.ts";
 import type { SettingsRepository } from "../../db/repositories/settings-repository.ts";
 import { loadMuteVoteConfig, saveMuteVoteConfig } from "../../parts/mute-vote/config.ts";
 import type { MuteVoteConfig } from "../../parts/mute-vote/default-config.ts";

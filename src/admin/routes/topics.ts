@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router } from "../async-router.ts";
 import type { AiUsageRepository } from "../../db/repositories/ai-usage-repository.ts";
 import type { ChatsRepository } from "../../db/repositories/chats-repository.ts";
 import type { SettingsRepository } from "../../db/repositories/settings-repository.ts";

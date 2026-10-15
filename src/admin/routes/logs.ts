@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router } from "../async-router.ts";
 import type { LogLevel } from "../../db/entities/PartLog.ts";
 import type { LogsRepository } from "../../db/repositories/logs-repository.ts";
 

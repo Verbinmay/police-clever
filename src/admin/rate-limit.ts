@@ -7,8 +7,9 @@ import type { NextFunction, Request, Response } from "express";
  * (выставляет Cloudflare), затем первый адрес из X-Forwarded-For (Caddy).
  *
  * Оба заголовка можно подделать, если ходить на VPS в обход Cloudflare —
- * поэтому у логина, помимо лимитов по IP, есть глобальные лимиты, которые
- * от подмены IP не зависят (см. routes/auth.ts).
+ * поэтому у логина, помимо лимитов по IP, есть общее замедление при массе
+ * неудач со всех IP (см. routes/auth.ts), а у /api — общий потолок для
+ * запросов без сессии.
  */
 export function clientIp(req: Request): string {
 	const cf = req.headers["cf-connecting-ip"];
@@ -79,27 +80,30 @@ function formatWait(sec: number): string {
 
 /**
  * Лимит на весь /api панели: по IP на любые запросы и отдельно, строже, на
- * изменяющие (POST/PUT/DELETE), плюс общий потолок на всех — страховка на
- * случай подмены IP. Цифры с запасом под обычную работу: открытие вкладки —
- * 1-3 запроса, сохранение — 1.
+ * изменяющие (POST/PUT/DELETE). Плюс общий потолок на всех — страховка на
+ * случай подмены IP, — но только для запросов БЕЗ валидной сессии: иначе
+ * любой посторонний мог бы забить общий счётчик мусорными запросами и
+ * закрыть панель уже вошедшему владельцу. Цифры с запасом под обычную
+ * работу: открытие вкладки — 1-3 запроса, сохранение — 1.
  */
-export function apiRateLimit() {
+export function apiRateLimit(isAuthenticated: (req: Request) => boolean) {
 	const perIp = new RateLimiter(120, 60_000);
 	const writesPerIp = new RateLimiter(30, 60_000);
-	const global = new RateLimiter(600, 60_000);
+	const globalAnonymous = new RateLimiter(600, 60_000);
 
 	return (req: Request, res: Response, next: NextFunction): void => {
 		const ip = clientIp(req);
 		const isWrite = req.method !== "GET" && req.method !== "HEAD" && req.method !== "OPTIONS";
+		const anonymous = !isAuthenticated(req);
 
-		const wait = Math.max(perIp.blockedFor(ip), global.blockedFor("all"), isWrite ? writesPerIp.blockedFor(ip) : 0);
+		const wait = Math.max(perIp.blockedFor(ip), anonymous ? globalAnonymous.blockedFor("all") : 0, isWrite ? writesPerIp.blockedFor(ip) : 0);
 		if (wait > 0) {
 			sendTooManyRequests(res, wait, "Слишком много запросов к панели.");
 			return;
 		}
 
 		perIp.hit(ip);
-		global.hit("all");
+		if (anonymous) globalAnonymous.hit("all");
 		if (isWrite) writesPerIp.hit(ip);
 		next();
 	};

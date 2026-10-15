@@ -103,7 +103,12 @@ export async function runBirthdayCongratulations(repos: Repositories, telegram: 
 	const { dayMonth, isoDate, hour } = nowInMoscow();
 	if (hour !== CONGRATS_HOUR_MOSCOW) return;
 
+	// 29.02 в невисокосный год поздравляем 28.02 — иначе такие люди
+	// получали бы поздравление раз в четыре года.
+	const year = Number(isoDate.slice(0, 4));
+	const isLeapYear = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
 	const birthdays = await repos.birthdays.findByBirthdayDay(dayMonth);
+	if (dayMonth === "28.02" && !isLeapYear) birthdays.push(...(await repos.birthdays.findByBirthdayDay("29.02")));
 	if (birthdays.length === 0) return;
 
 	const sentLog = await repos.settings.get<Record<string, string>>(PART_ID, SENT_LOG_KEY, {});

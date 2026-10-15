@@ -1,4 +1,4 @@
-import { Brackets, type DataSource } from "typeorm";
+import { Brackets, type DataSource, MoreThan } from "typeorm";
 import { type BallotChoice, MuteVoteBallotSchema } from "../entities/MuteVoteBallot.ts";
 import { type MuteVote, type MuteVoteStatus, MuteVoteSchema } from "../entities/MuteVote.ts";
 
@@ -32,9 +32,19 @@ export class MuteVotesRepository {
 		return this.votes.findOneBy({ id });
 	}
 
-	/** Защита от спама голосованиями — не даём открыть второе, пока по этой же цели в этой теме уже идёт одно. */
+	/**
+	 * Защита от спама голосованиями — не даём открыть второе, пока по этой же
+	 * цели в этой теме уже идёт одно. Только не истёкшие по времени: раньше
+	 * голосование, чей таймер потерялся при рестарте, оставалось "open"
+	 * навсегда и блокировало новые голосования по этой цели.
+	 */
 	async findOpenByTarget(chatId: string, threadId: string, targetTgId: string): Promise<MuteVote | null> {
-		return this.votes.findOneBy({ chatId, threadId, targetTgId, status: "open" });
+		return this.votes.findOneBy({ chatId, threadId, targetTgId, status: "open", expiresAt: MoreThan(new Date()) });
+	}
+
+	/** Все ещё открытые голосования — при старте бота, чтобы заново поставить таймеры завершения (они живут только в памяти процесса). */
+	async listOpen(): Promise<MuteVote[]> {
+		return this.votes.findBy({ status: "open" });
 	}
 
 	/** true — голос принят впервые; false — юзер уже голосовал (повторный клик игнорируем). */

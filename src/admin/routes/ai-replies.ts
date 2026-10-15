@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router } from "../async-router.ts";
 import type { AiUsageRepository } from "../../db/repositories/ai-usage-repository.ts";
 
 /** Лог реальных AI-ответов — промпт, отправленный контекст, сам ответ. Следить за тем, что бот реально генерит. */

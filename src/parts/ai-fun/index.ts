@@ -104,6 +104,8 @@ export function createAiFunPart(): PartDefinition {
 				return createAiClient(config.providers[provider], apiKey, provider);
 			}
 
+			const inFlightChats = new Set<string>();
+
 			async function sendFallbackSticker(ctx: BotContext, settings: SettingsRepository, config: AiConfig, chatId: string, threadId: string) {
 				if (!config.stickerPackShortName) return;
 				if (await isOnCooldown(settings, chatId, config.stickerCooldownMinutes, "sticker")) return;
@@ -171,7 +173,11 @@ export function createAiFunPart(): PartDefinition {
 
 				// Кулдаун и дневной кап — на весь чат (см. комментарий у функции), не на тему.
 				let blockedReason: "cooldown" | "daily_cap" | "monthly_budget" | null = null;
-				if (await isOnCooldown(repos.settings, chatId, config.cooldownMinutes)) blockedReason = "cooldown";
+				// inFlightChats — ответ в этом чате уже генерируется прямо сейчас.
+				// Кулдаун ставится только после ответа модели (2-5 с), а апдейты
+				// обрабатываются параллельно: без этой проверки два сообщения
+				// подряд (вызов по имени + выигрыш гачи) давали два ответа.
+				if (inFlightChats.has(chatId) || (await isOnCooldown(repos.settings, chatId, config.cooldownMinutes))) blockedReason = "cooldown";
 				else if ((await repos.aiUsage.countLast24h(chatId)) >= config.dailyCallCapPerChat) blockedReason = "daily_cap";
 				else if (await isOverMonthlyBudget(repos.aiUsage, config.monthlyBudgetUsd)) blockedReason = "monthly_budget";
 
@@ -184,125 +190,131 @@ export function createAiFunPart(): PartDefinition {
 					return next();
 				}
 
-				const kind: AiUsageKind = isTriggered ? "trigger" : "gacha";
-				const botName = displayName(ctx.botInfo) ?? "бот";
-				const botTgId = ctx.botInfo?.id ? String(ctx.botInfo.id) : undefined;
-				const context = await buildChatContext(repos.messages, chatId, threadId, config, botName, botTgId);
+				inFlightChats.add(chatId);
+				try {
+					const kind: AiUsageKind = isTriggered ? "trigger" : "gacha";
+					const botName = displayName(ctx.botInfo) ?? "бот";
+					const botTgId = ctx.botInfo?.id ? String(ctx.botInfo.id) : undefined;
+					const context = await buildChatContext(repos.messages, chatId, threadId, config, botName, botTgId);
 
-				// Раньше триггер по имени получал только голую инструкцию "тебе
-				// написали, ответь" — без сценария на выбор, в отличие от гачи
-				// (там их всегда 20+ на выбор). На практике это и давало самые
-				// пресные ответы в логе ("Она всегда была слишком наблюдательной"
-				// и т.п.) — без творческой установки модель откатывается на
-				// нейтральную вежливую фразу. Теперь сценарий выбирается всегда,
-				// для обоих видов — просто для триггера сверху добавляется
-				// требование остаться по существу того, что реально написали.
-				//
-				// preferredTarget — тот, кто позвал бота: без этого {target}
-				// сценария выбирался случайно из последних 20 активных, и ответ
-				// раздваивался (по существу — про позвавшего, шутка сценария —
-				// про кого-то третьего). См. scenario.ts.
-				const addressorName = isTriggered ? (displayName(ctx.from) ?? undefined) : undefined;
-				const picked = await pickAction(repos.settings, config, context.activeParticipants, addressorName);
+					// Раньше триггер по имени получал только голую инструкцию "тебе
+					// написали, ответь" — без сценария на выбор, в отличие от гачи
+					// (там их всегда 20+ на выбор). На практике это и давало самые
+					// пресные ответы в логе ("Она всегда была слишком наблюдательной"
+					// и т.п.) — без творческой установки модель откатывается на
+					// нейтральную вежливую фразу. Теперь сценарий выбирается всегда,
+					// для обоих видов — просто для триггера сверху добавляется
+					// требование остаться по существу того, что реально написали.
+					//
+					// preferredTarget — тот, кто позвал бота: без этого {target}
+					// сценария выбирался случайно из последних 20 активных, и ответ
+					// раздваивался (по существу — про позвавшего, шутка сценария —
+					// про кого-то третьего). См. scenario.ts.
+					const addressorName = isTriggered ? (displayName(ctx.from) ?? undefined) : undefined;
+					const picked = await pickAction(repos.settings, config, context.activeParticipants, addressorName);
 
-				// Если триггер-сообщение — реплай, само по себе оно часто
-				// бессмысленно без цитаты ("а он тебе на это что скажет?") — без
-				// неё модель отвечает вслепую и скатывается в общие фразы.
-				// caption — на случай реплая на фото/видео с подписью, а не
-				// на чистый текст.
-				const replyTo = ctx.message.reply_to_message;
-				const quotedText = replyTo && ("text" in replyTo ? replyTo.text : "caption" in replyTo ? replyTo.caption : undefined);
-				const replyContext = quotedText
-					? ` Это реплай на сообщение ${displayName("from" in replyTo && replyTo.from ? replyTo.from : undefined) ?? "кого-то"}: "${quotedText}".`
-					: "";
+					// Если триггер-сообщение — реплай, само по себе оно часто
+					// бессмысленно без цитаты ("а он тебе на это что скажет?") — без
+					// неё модель отвечает вслепую и скатывается в общие фразы.
+					// caption — на случай реплая на фото/видео с подписью, а не
+					// на чистый текст.
+					const replyTo = ctx.message.reply_to_message;
+					const quotedText = replyTo && ("text" in replyTo ? replyTo.text : "caption" in replyTo ? replyTo.caption : undefined);
+					const replyContext = quotedText
+						? ` Это реплай на сообщение ${displayName("from" in replyTo && replyTo.from ? replyTo.from : undefined) ?? "кого-то"}: "${quotedText}".`
+						: "";
 
-				// Голое обращение ("Реня" без ничего ещё) не даёт модели ничего,
-				// к чему привязать "ответь по существу" — кроме случая, когда это
-				// реплай (тогда цитата и есть содержание). Раньше порог был 12
-				// символов, и короткие, но содержательные обращения ("Реня
-				// манда", "Реня ты где") уходили в ветку "позвали без повода" —
-				// бот отвечал мимо сказанного. Теперь содержание — любое слово
-				// из 3+ букв после вычета имени, кроме пустых междометий.
-				const strippedText = config.triggerWords
-					.reduce((acc, word) => {
-						if (!word) return acc;
-						const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-						return acc.replace(new RegExp(escaped, "gi"), "");
-					}, text)
-					.trim();
-				const hasRealContent = hasMeaningfulWords(strippedText) || Boolean(quotedText);
+					// Голое обращение ("Реня" без ничего ещё) не даёт модели ничего,
+					// к чему привязать "ответь по существу" — кроме случая, когда это
+					// реплай (тогда цитата и есть содержание). Раньше порог был 12
+					// символов, и короткие, но содержательные обращения ("Реня
+					// манда", "Реня ты где") уходили в ветку "позвали без повода" —
+					// бот отвечал мимо сказанного. Теперь содержание — любое слово
+					// из 3+ букв после вычета имени, кроме пустых междометий.
+					const strippedText = config.triggerWords
+						.reduce((acc, word) => {
+							if (!word) return acc;
+							const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+							return acc.replace(new RegExp(escaped, "gi"), "");
+						}, text)
+						.trim();
+					const hasRealContent = hasMeaningfulWords(strippedText) || Boolean(quotedText);
 
-				const action = isTriggered
-					? hasRealContent
-						? `Тебе написали: "${text}"${replyContext} — ответь по существу этого. ${picked.action}`
-						: `Тебя просто позвали по имени без повода — ответь в характере, как будто тебя дёрнули без дела. ${picked.action}`
-					: picked.action;
-				const prompt = buildSystemPrompt(config, action);
-				const userContent = buildUserContent(context);
+					const action = isTriggered
+						? hasRealContent
+							? `Тебе написали: "${text}"${replyContext} — ответь по существу этого. ${picked.action}`
+							: `Тебя просто позвали по имени без повода — ответь в характере, как будто тебя дёрнули без дела. ${picked.action}`
+						: picked.action;
+					const prompt = buildSystemPrompt(config, action);
+					const userContent = buildUserContent(context);
 
-				const reply = await aiClient.getReply(prompt, userContent, logger, config.maxTokens);
-				if (!reply) {
-					logger.warn("AI request produced no reply", { chatId, threadId, kind });
-					// Реальный сбой вызова (сеть/провайдер), а не блокировка лимитами —
-					// раньше тут не было даже стикера-заглушки, при живом баге (см.
-					// ai-client.ts) это означало полное молчание на прямое обращение.
-					if (isTriggered) await sendFallbackSticker(ctx, repos.settings, config, chatId, threadId);
+					const reply = await aiClient.getReply(prompt, userContent, logger, config.maxTokens);
+					if (!reply) {
+						logger.warn("AI request produced no reply", { chatId, threadId, kind });
+						// Реальный сбой вызова (сеть/провайдер), а не блокировка лимитами —
+						// раньше тут не было даже стикера-заглушки, при живом баге (см.
+						// ai-client.ts) это означало полное молчание на прямое обращение.
+						if (isTriggered) await sendFallbackSticker(ctx, repos.settings, config, chatId, threadId);
+						return next();
+					}
+
+					// Ответ — реплаем на то, к чему он относится: на вызов по имени —
+					// на сам вызов, на шутку про {target} — на его последнее
+					// сообщение, иначе — на последнее сообщение чата (текущее). Без
+					// этого в активном чате было непонятно, кому и на что бот
+					// отвечает. allow_sending_without_reply — если сообщение успели
+					// удалить, ответ всё равно уйдёт, просто без цитаты.
+					const replyToMessageId = (!isTriggered && picked.target && context.lastMessageIdByName[picked.target]) || String(ctx.message.message_id);
+					let botMessageId: string | null = null;
+					for (const chunk of cropTextForMessage(reply.text)) {
+						const sent: { message_id: number } | null = await ctx.telegram
+							.sendMessage(chatId, chunk, {
+								message_thread_id: toThreadIdParam(threadId),
+								reply_parameters: botMessageId ? undefined : { message_id: Number(replyToMessageId), allow_sending_without_reply: true },
+							})
+							.catch((err) => {
+								logger.warn("Не удалось отправить AI-ответ", { chatId, threadId }, err);
+								return null;
+							});
+						if (sent && !botMessageId) botMessageId = String(sent.message_id);
+					}
+
+					// Ничего не ушло в чат (нет прав писать в тему, сбой сети) — не
+					// пишем реплику в контекст как "сказанную" (чат её не видел) и не
+					// ставим кулдаун. В AiUsage вызов всё равно пишем: он оплачен и
+					// должен учитываться в месячном бюджете (botMessageId = null).
+					if (botMessageId) {
+						await markCooldown(repos.settings, chatId);
+						// botName исключён из activeParticipants в buildChatContext —
+						// бот не должен шутить/докапываться сам на себя.
+						await repos.messages.save({ chatId, threadId, tgId: botTgId ?? "0", fromName: botName, text: reply.text, messageId: botMessageId });
+					} else {
+						logger.warn("AI reply generated but not delivered", { chatId, threadId, kind });
+					}
+
+					const costUsd = estimateCostUsd(reply.promptTokens, reply.completionTokens, config.providers[config.provider]);
+					await repos.aiUsage.record({
+						chatId,
+						threadId,
+						kind,
+						provider: config.provider,
+						promptText: prompt,
+						userContent,
+						replyText: reply.text,
+						promptTokens: reply.promptTokens,
+						completionTokens: reply.completionTokens,
+						costUsd,
+						scenario: picked.template,
+						model: reply.model,
+						latencyMs: reply.latencyMs,
+						botMessageId,
+					});
+					if (botMessageId) logger.info("AI replied", { chatId, threadId, kind, provider: config.provider, costUsd, latencyMs: reply.latencyMs });
+
 					return next();
+				} finally {
+					inFlightChats.delete(chatId);
 				}
-
-				// Кулдаун ставим только на реально состоявшийся ответ — неудачный
-				// запрос (сеть/лимиты провайдера) не должен сжигать окно.
-				await markCooldown(repos.settings, chatId);
-
-				// Ответ — реплаем на то, к чему он относится: на вызов по имени —
-				// на сам вызов, на шутку про {target} — на его последнее
-				// сообщение, иначе — на последнее сообщение чата (текущее). Без
-				// этого в активном чате было непонятно, кому и на что бот
-				// отвечает. allow_sending_without_reply — если сообщение успели
-				// удалить, ответ всё равно уйдёт, просто без цитаты.
-				const replyToMessageId = (!isTriggered && picked.target && context.lastMessageIdByName[picked.target]) || String(ctx.message.message_id);
-				let botMessageId: string | null = null;
-				for (const chunk of cropTextForMessage(reply.text)) {
-					const sent: { message_id: number } | null = await ctx.telegram
-						.sendMessage(chatId, chunk, {
-							message_thread_id: toThreadIdParam(threadId),
-							reply_parameters: botMessageId ? undefined : { message_id: Number(replyToMessageId), allow_sending_without_reply: true },
-						})
-						.catch((err) => {
-							logger.warn("Не удалось отправить AI-ответ", { chatId, threadId }, err);
-							return null;
-						});
-					if (sent && !botMessageId) botMessageId = String(sent.message_id);
-				}
-
-				// Свои же реплики бот раньше нигде не сохранял (messages.save
-				// вызывает только core на ВХОДЯЩИХ апдейтах, а это прямой исходящий
-				// вызов) — из-за этого сводка и сырой контекст были "слепы" к
-				// собственным словам бота, не только к чужим. botName исключён из
-				// activeParticipants в buildChatContext — бот не должен шутить/
-				// докапываться сам на себя.
-				await repos.messages.save({ chatId, threadId, tgId: botTgId ?? "0", fromName: botName, text: reply.text, messageId: botMessageId });
-
-				const costUsd = estimateCostUsd(reply.promptTokens, reply.completionTokens, config.providers[config.provider]);
-				await repos.aiUsage.record({
-					chatId,
-					threadId,
-					kind,
-					provider: config.provider,
-					promptText: prompt,
-					userContent,
-					replyText: reply.text,
-					promptTokens: reply.promptTokens,
-					completionTokens: reply.completionTokens,
-					costUsd,
-					scenario: picked.template,
-					model: reply.model,
-					latencyMs: reply.latencyMs,
-					botMessageId,
-				});
-				logger.info("AI replied", { chatId, threadId, kind, provider: config.provider, costUsd, latencyMs: reply.latencyMs });
-
-				return next();
 			});
 
 			// Реакции на ответы бота — главный сигнал "зашло/не зашло" для

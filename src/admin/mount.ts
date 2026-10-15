@@ -1,6 +1,6 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import express, { type Express } from "express";
+import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import type { Telegram } from "telegraf";
 import type { Repositories } from "../bot-part.ts";
 import { config } from "../config.ts";
@@ -9,6 +9,7 @@ import { csrfOriginCheck } from "./auth.ts";
 import { bootstrapAdminAccount } from "./bootstrap.ts";
 import { apiRateLimit } from "./rate-limit.ts";
 import { requireSession } from "./require-session.ts";
+import { readSessionAccountId } from "./session.ts";
 import { createAccountsRouter } from "./routes/accounts.ts";
 import { createAiConfigRouter } from "./routes/ai-config.ts";
 import { createAiRepliesRouter } from "./routes/ai-replies.ts";
@@ -58,7 +59,7 @@ export async function mountAdmin(app: Express, repos: Repositories, logger: Logg
 	app.use(csrfOriginCheck);
 	// Общий лимит на весь /api (включая вход) — до роутеров. У логина сверху
 	// ещё свои, гораздо более жёсткие лимиты (routes/auth.ts).
-	app.use("/api", apiRateLimit());
+	app.use("/api", apiRateLimit((req) => readSessionAccountId(req.headers.cookie, config.SESSION_SECRET) !== null));
 	app.use("/api/auth", createAuthRouter(repos.adminAccounts));
 
 	app.use("/api/topics", requireSession, createTopicsRouter(repos.chats, repos.topics, repos.settings, repos.aiUsage));
@@ -87,4 +88,11 @@ export async function mountAdmin(app: Express, repos: Repositories, logger: Logg
 			setHeaders: (res) => res.setHeader("Cache-Control", "no-cache"),
 		}),
 	);
+
+	// Исключения из маршрутов панели (async доходят сюда через async-router.ts):
+	// раньше запрос просто висел до таймаута браузера.
+	app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
+		logger.error(`Admin API ${req.method} ${req.originalUrl} failed`, {}, err);
+		if (!res.headersSent) res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+	});
 }

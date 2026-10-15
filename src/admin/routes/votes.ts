@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router } from "../async-router.ts";
 import type { Telegram } from "telegraf";
 import type { MuteVotesRepository } from "../../db/repositories/mute-votes-repository.ts";
 import type { TopicsRepository } from "../../db/repositories/topics-repository.ts";

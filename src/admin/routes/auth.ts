@@ -1,5 +1,5 @@
 import argon2 from "argon2";
-import { Router } from "express";
+import { Router } from "../async-router.ts";
 import { setTimeout as sleep } from "node:timers/promises";
 import type { AdminAccountsRepository } from "../../db/repositories/admin-accounts-repository.ts";
 import { config } from "../../config.ts";
@@ -9,6 +9,8 @@ import { readSessionAccountId, createSessionCookie, clearSessionCookie } from ".
 const MINUTE = 60_000;
 /** Пауза перед ответом на неверный пароль — делает перебор медленным даже в пределах лимитов. */
 const FAILURE_DELAY_MS = 1000;
+/** Пауза, когда со всех IP вместе неудач слишком много (вероятный перебор с подменой IP). */
+const SURGE_DELAY_MS = 5000;
 
 /**
  * Логин/логаут/"кто я" — единственные /api-маршруты панели, доступные без сессии.
@@ -16,10 +18,12 @@ const FAILURE_DELAY_MS = 1000;
  * Лимиты на вход (все в памяти процесса, см. rate-limit.ts):
  *  - любых попыток с одного IP — 10 за 15 минут;
  *  - неудачных с одного IP — 5 за 15 минут;
- *  - неудачных на один логин — 10 за час (перебор пароля конкретного
- *    аккаунта с разных IP);
- *  - неудачных всего, со всех IP — 30 за 15 минут (страховка от подмены
- *    IP через заголовки в обход Cloudflare).
+ *  - неудачных на один логин больше 10 за час (перебор пароля конкретного
+ *    аккаунта с разных IP) — замедление, как ниже;
+ *  - если неудачных со всех IP вместе больше 30 за 15 минут (перебор с
+ *    подменой IP в обход Cloudflare) — каждая попытка входа отвечает с
+ *    паузой 5 с, но НЕ блокируется: полная блокировка по общему счётчику
+ *    позволила бы любому закрыть вход владельцу.
  * Успешный вход сбрасывает счётчики неудач этого IP и логина.
  */
 export function createAuthRouter(accounts: AdminAccountsRepository): Router {
@@ -31,20 +35,16 @@ export function createAuthRouter(accounts: AdminAccountsRepository): Router {
 
 	router.post("/login", async (req, res) => {
 		const ip = clientIp(req);
-		const rawUsername = (req.body as { username?: unknown }).username;
+		const rawUsername = ((req.body ?? {}) as { username?: unknown }).username;
 		const userKey = typeof rawUsername === "string" ? rawUsername.trim().toLowerCase() : "";
 
-		const wait = Math.max(
-			attemptsPerIp.blockedFor(ip),
-			failuresPerIp.blockedFor(ip),
-			failuresGlobal.blockedFor("all"),
-			userKey ? failuresPerUser.blockedFor(userKey) : 0,
-		);
+		const wait = Math.max(attemptsPerIp.blockedFor(ip), failuresPerIp.blockedFor(ip));
 		if (wait > 0) {
 			sendTooManyRequests(res, wait, "Слишком много попыток входа.");
 			return;
 		}
 		attemptsPerIp.hit(ip);
+		if (failuresGlobal.blockedFor("all") > 0 || (userKey && failuresPerUser.blockedFor(userKey) > 0)) await sleep(SURGE_DELAY_MS);
 
 		const { username, password } = req.body as { username?: string; password?: string };
 		if (typeof username !== "string" || typeof password !== "string" || !username || !password) {

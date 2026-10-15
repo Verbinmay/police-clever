@@ -1,5 +1,5 @@
 import argon2 from "argon2";
-import { Router } from "express";
+import { Router } from "../async-router.ts";
 import type { AdminAccountsRepository } from "../../db/repositories/admin-accounts-repository.ts";
 import type { AuthedRequest } from "../require-session.ts";
 

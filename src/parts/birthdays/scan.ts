@@ -1,3 +1,4 @@
+import { setTimeout as sleep } from "node:timers/promises";
 import type { Telegram } from "telegraf";
 import type { Repositories } from "../../bot-part.ts";
 import type { Chat } from "../../db/entities/Chat.ts";
@@ -6,9 +7,10 @@ import type { Logger } from "../../logger/logger.ts";
 export const SCAN_INTERVAL_MS = 48 * 60 * 60 * 1000; // раз в двое суток, по прямому требованию
 const PART_ID = "birthdays";
 const LAST_SCAN_KEY = "lastScanAt";
-// Тумблер на весь чат (см. Chat.birthdaysEnabled), а не на тему — в один
-// проход может попасть много разных людей сразу.
-const MAX_USERS_PER_BATCH = 60;
+// Пауза между getChat — не заваливаем Bot API (лимит ~30 запросов/с), при
+// этом проходим ВСЕХ участников окна: раньше брались только первые 60, а
+// следующий скан начинался уже с нового окна, и остальные терялись насовсем.
+const GET_CHAT_DELAY_MS = 100;
 
 interface ProfileEntry {
 	tgId: string;
@@ -98,14 +100,14 @@ async function scanOneChat(repos: Repositories, chat: Chat, since: Date, logger:
 		if (!fallbackNameByTgId.has(message.tgId)) fallbackNameByTgId.set(message.tgId, message.fromName ?? "аноним");
 	}
 
-	// Первые MAX_USERS_PER_BATCH встреченных — при большом чате остальные
-	// попадут в следующий проход через 48ч, не теряются насовсем.
-	const tgIds = Array.from(fallbackNameByTgId.keys()).slice(0, MAX_USERS_PER_BATCH);
+	const tgIds = Array.from(fallbackNameByTgId.keys());
 	if (tgIds.length === 0) return;
 
 	for (const tgId of tgIds) {
-		// Последовательно, не Promise.all — не заваливаем Bot API
-		// параллельным потоком getChat на пару десятков человек разом.
+		// Последовательно и с паузой, не Promise.all — не заваливаем Bot API
+		// параллельным потоком getChat.
+		// eslint-disable-next-line no-await-in-loop
+		await sleep(GET_CHAT_DELAY_MS);
 		// eslint-disable-next-line no-await-in-loop
 		const profile = await fetchProfile(telegram, tgId, fallbackNameByTgId.get(tgId) ?? "аноним", logger);
 		// eslint-disable-next-line no-await-in-loop

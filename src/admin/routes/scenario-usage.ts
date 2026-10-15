@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router } from "../async-router.ts";
 import type { SettingsRepository } from "../../db/repositories/settings-repository.ts";
 import { loadAiConfig } from "../../parts/ai-fun/config.ts";
 import { usageKey } from "../../parts/ai-fun/scenario.ts";

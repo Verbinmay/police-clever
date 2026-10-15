@@ -18,7 +18,7 @@ import { muteUser } from "./mute.ts";
 export function createMuteVotePart(): PartDefinition {
 	return {
 		id: "mute-vote",
-		setup({ repos, logger }: PartSetupContext) {
+		async setup({ bot, repos, logger }: PartSetupContext) {
 			const composer = new Composer<BotContext>();
 			const timers = new Map<string, NodeJS.Timeout>();
 
@@ -65,6 +65,19 @@ export function createMuteVotePart(): PartDefinition {
 				}
 			}
 
+			// Таймеры завершения живут только в памяти — после рестарта (любой
+			// деплой) заново планируем завершение всех ещё открытых голосований;
+			// уже истёкшие завершаются сразу.
+			for (const vote of await repos.muteVotes.listOpen()) {
+				const delay = Math.max(0, vote.expiresAt.getTime() - Date.now());
+				timers.set(
+					vote.id,
+					setTimeout(() => {
+						finalizeVote(bot.telegram, vote.id).catch((err) => logger.error("Failed to finalize mute vote", { voteId: vote.id }, err));
+					}, delay),
+				);
+			}
+
 			// Запуск голосования: реплай спецфразой на сообщение нарушителя.
 			composer.on("text", async (ctx, next) => {
 				const chat = ctx.chat;
@@ -79,7 +92,13 @@ export function createMuteVotePart(): PartDefinition {
 				const text = ctx.message.text.trim();
 				if (text !== config.triggerPhrase) return next();
 
-				const replyTo = ctx.message.reply_to_message;
+				// В форум-темах Telegram сам ставит reply_to_message на служебное
+				// сообщение создания темы, даже если человек не отвечал ни на что —
+				// без этой проверки спецфраза без реплая открывала голосование
+				// против создателя темы.
+				const rawReplyTo = ctx.message.reply_to_message;
+				const isTopicRoot = Boolean(rawReplyTo && ("forum_topic_created" in rawReplyTo || rawReplyTo.message_id === ctx.message.message_thread_id));
+				const replyTo = isTopicRoot ? undefined : rawReplyTo;
 				const target = replyTo && "from" in replyTo ? replyTo.from : undefined;
 				if (!target || target.is_bot) {
 					await ctx.reply("Спецфразу нужно отправить реплаем на сообщение живого участника.", { message_thread_id: threadId === "0" ? undefined : Number(threadId) }).catch(() => {});
@@ -127,7 +146,9 @@ export function createMuteVotePart(): PartDefinition {
 					expiresAt,
 				});
 
-				const timer = setTimeout(() => finalizeVote(ctx.telegram, vote.id), config.windowMinutes * 60 * 1000);
+				const timer = setTimeout(() => {
+					finalizeVote(ctx.telegram, vote.id).catch((err) => logger.error("Failed to finalize mute vote", { voteId: vote.id }, err));
+				}, config.windowMinutes * 60 * 1000);
 				timers.set(vote.id, timer);
 
 				logger.info("Mute vote opened", { voteId: vote.id, chatId, threadId, target: String(target.id), requestedBy: ctx.from?.id });

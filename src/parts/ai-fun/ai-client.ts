@@ -3,8 +3,14 @@ import { setTimeout as sleep } from "node:timers/promises";
 import type { Logger } from "../../logger/logger.ts";
 import type { ProviderId, ProviderModelConfig } from "./providers.ts";
 
-const MAX_RETRIES = 3;
+// Ответ бота обрабатывается внутри вебхук-запроса Telegram: пока он не
+// закончен, Telegram ждёт, а при долгом ожидании присылает тот же апдейт
+// повторно (двойной ответ, двойной расход). Поэтому общий бюджет времени
+// жёстко ограничен: 2 попытки по 15 с, без внутренних ретраев SDK (по
+// умолчанию у него 10 минут ожидания и свои повторы поверх наших).
+const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 500;
+const REQUEST_TIMEOUT_MS = 15_000;
 const DEFAULT_MAX_TOKENS = 1000;
 
 export interface AiReply {
@@ -50,11 +56,12 @@ export interface AiReply {
  * полей, и лишнее поле пропало бы при первом же сохранении.
  */
 export function openAiNoReasoningEffort(model: string): "minimal" | "none" {
-	return /^gpt-5(-mini|-nano)?$/.test(model) ? "minimal" : "none";
+	// С датированными снапшотами тоже (gpt-5-mini-2025-08-07 и т.п.).
+	return /^gpt-5(-mini|-nano)?(-\d{4}-\d{2}-\d{2})?$/.test(model) ? "minimal" : "none";
 }
 
 export function createAiClient(provider: ProviderModelConfig, apiKey: string, providerId: ProviderId) {
-	const openai = new OpenAI({ baseURL: provider.baseUrl, apiKey, maxRetries: 4 });
+	const openai = new OpenAI({ baseURL: provider.baseUrl, apiKey, maxRetries: 0, timeout: REQUEST_TIMEOUT_MS });
 
 	return {
 		/**
@@ -118,7 +125,11 @@ export function createAiClient(provider: ProviderModelConfig, apiKey: string, pr
 						latencyMs: Date.now() - startedAt,
 					};
 				} catch (err) {
-					if (attempt === MAX_RETRIES) {
+					// 4xx (кроме 429) — ошибка самого запроса (неверный параметр,
+					// ключ, модель): повтор даст тот же ответ, только потратит время.
+					const status = err instanceof OpenAI.APIError ? err.status : undefined;
+					const retryable = status === undefined || status === 429 || status >= 500;
+					if (attempt === MAX_RETRIES || !retryable) {
 						logger.error("AI request failed after retries", { attempt, provider: provider.label, model: provider.model }, err);
 						return null;
 					}
