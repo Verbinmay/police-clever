@@ -56,8 +56,11 @@ export function createAiClient(provider: ProviderModelConfig, apiKey: string, pr
 							{ role: "system", content: systemPrompt },
 							{ role: "user", content: dialogText },
 						],
-						temperature: 0.9,
 					};
+					// Живой баг: gpt-5-mini (reasoning-модель) отклоняет любой
+					// temperature, кроме дефолтного 1, 400-й ошибкой ("Only the
+					// default (1) value is supported") — OpenAI шлём без него.
+					if (providerId !== "openai") params.temperature = 0.9;
 					// Живой баг: OpenAI (gpt-5-mini) отклоняет max_tokens 400-й ошибкой
 					// ("Unsupported parameter... Use 'max_completion_tokens' instead")
 					// — новые модели требуют переименованный параметр, старый общий
