@@ -3,24 +3,26 @@ import type { AiUsageRepository } from "../../db/repositories/ai-usage-repositor
 import type { SettingsRepository } from "../../db/repositories/settings-repository.ts";
 import { loadAiConfig } from "../../parts/ai-fun/config.ts";
 
-/** Статистика AI + бюджет: сколько потрачено сегодня/в этом месяце, остаток от месячного лимита, активный провайдер. */
+/** Статистика AI + бюджет + отклик по сценариям (реакции/реплаи): сколько потрачено сегодня/в этом месяце, остаток от месячного лимита, активный провайдер. */
 export function createAiStatsRouter(aiUsage: AiUsageRepository, settings: SettingsRepository): Router {
 	const router = Router();
 
 	router.get("/", async (req, res) => {
 		const days = req.query.days ? Number(req.query.days) : 30;
-		const [daily, byChat, todayCostUsd, monthToDateCostUsd, config] = await Promise.all([
+		const [daily, byChat, todayCostUsd, monthToDateCostUsd, config, scenarios] = await Promise.all([
 			aiUsage.dailyTotals(days),
 			aiUsage.totalsByChat(days),
 			aiUsage.todayCostUsd(),
 			aiUsage.monthToDateCostUsd(),
 			loadAiConfig(settings),
+			aiUsage.scenarioStats(days),
 		]);
 
 		const monthlyBudgetUsd = config.monthlyBudgetUsd;
 		res.json({
 			daily,
 			byChat,
+			scenarios,
 			budget: {
 				provider: config.provider,
 				todayCostUsd,

@@ -49,6 +49,10 @@ async function pickLeastUsedScenario(settings: SettingsRepository, list: string[
 export interface PickedAction {
 	/** Итоговый текст сценария, {target} уже подставлен (если был и если нашлась цель). */
 	action: string;
+	/** Шаблон как в конфиге, до подстановки — ключ статистики сценариев (AiUsage.scenario). */
+	template: string;
+	/** Кого подставили в {target} — на его сообщение бот и отвечает реплаем. */
+	target?: string;
 }
 
 /**
@@ -73,13 +77,13 @@ export async function pickAction(settings: SettingsRepository, config: AiConfig,
 	const template = (await pickLeastUsedScenario(settings, pool)) ?? "Пошути на тему разговора";
 
 	if (!template.includes("{target}")) {
-		return { action: template };
+		return { action: template, template };
 	}
 
 	const target = activeParticipants.length > 0 ? (preferredTarget && Math.random() < 0.7 ? preferredTarget : pickRandom(activeParticipants)) : preferredTarget;
 
 	// Не должно случиться (canTarget это гарантирует выше), но на всякий случай не шлём "{target}" в промпт как есть.
-	if (!target) return { action: template.replaceAll("{target}", "кое-кого") };
+	if (!target) return { action: template.replaceAll("{target}", "кое-кого"), template };
 
-	return { action: template.replaceAll("{target}", target) };
+	return { action: template.replaceAll("{target}", target), template, target };
 }

@@ -18,6 +18,8 @@ export interface Message {
 	tgId: string;
 	fromName: string | null;
 	text: string;
+	/** message_id в Telegram — чтобы ответ бота можно было отправить реплаем на конкретное сообщение. null — записи старше этого поля. */
+	messageId: string | null;
 	createdAt: Date;
 }
 
@@ -31,6 +33,7 @@ export const MessageSchema = new EntitySchema<Message>({
 		tgId: { type: "text", name: "tg_id" },
 		fromName: { type: "text", nullable: true, name: "from_name" },
 		text: { type: "text" },
+		messageId: { type: "text", nullable: true, name: "message_id" },
 		createdAt: { type: "timestamptz", name: "created_at", createDate: true },
 	},
 	indices: [{ columns: ["chatId", "threadId", "createdAt"] }],

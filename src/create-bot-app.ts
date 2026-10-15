@@ -131,6 +131,10 @@ export function createBotApp(config: BotAppConfig): BotApp {
 		try {
 			await bot.telegram.setWebhook(`${config.webhookBaseUrl}${config.webhookPath}`, {
 				secret_token: config.webhookSecretToken,
+				// Явный список: реакции (message_reaction*) Telegram без него не
+				// шлёт вообще — а они нужны для статистики сценариев (ai-fun).
+				// Остальное — ровно то, что реально обрабатывают части.
+				allowed_updates: ["message", "edited_message", "callback_query", "my_chat_member", "message_reaction", "message_reaction_count"],
 			});
 		} catch (err) {
 			logger.error("Не удалось установить webhook — бот не будет получать обновления, пока это не исправлено", {}, err);

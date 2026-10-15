@@ -13,6 +13,21 @@ export interface RecordAiUsageInput {
 	promptTokens: number;
 	completionTokens: number;
 	costUsd: number;
+	scenario?: string;
+	model?: string;
+	latencyMs?: number;
+	botMessageId?: string | null;
+}
+
+export interface ScenarioStatsRow {
+	scenario: string;
+	calls: number;
+	/** Доля ответов, собравших хотя бы одну реакцию или реплай, 0..1. */
+	engagedShare: number;
+	avgReactions: number;
+	avgReplies: number;
+	avgReplyLength: number;
+	avgLatencyMs: number;
 }
 
 export interface AiUsageDailyRow {
@@ -37,6 +52,69 @@ export class AiUsageRepository {
 
 	async record(input: RecordAiUsageInput): Promise<void> {
 		await this.repo.save(this.repo.create(input));
+	}
+
+	/**
+	 * Реакции на ответ бота: Telegram шлёт по каждому пользователю старый и
+	 * новый набор его реакций, отсюда дельта, а не абсолютное значение.
+	 * GREATEST — на случай снятия реакции, поставленной до того, как бот
+	 * начал их получать (иначе счётчик ушёл бы в минус).
+	 */
+	async addReactions(chatId: string, botMessageId: string, delta: number): Promise<boolean> {
+		const result = await this.repo
+			.createQueryBuilder()
+			.update()
+			.set({ reactions: () => `GREATEST(reactions + ${Math.trunc(delta)}, 0)` })
+			.where("chat_id = :chatId AND bot_message_id = :botMessageId", { chatId, botMessageId })
+			.execute();
+		return (result.affected ?? 0) > 0;
+	}
+
+	/** Анонимные реакции (message_reaction_count) приходят сразу итоговым числом — его и ставим. */
+	async setReactions(chatId: string, botMessageId: string, total: number): Promise<boolean> {
+		const result = await this.repo.update({ chatId, botMessageId }, { reactions: Math.max(0, total) });
+		return (result.affected ?? 0) > 0;
+	}
+
+	async incrementReplies(chatId: string, botMessageId: string): Promise<boolean> {
+		const result = await this.repo.increment({ chatId, botMessageId }, "replies", 1);
+		return (result.affected ?? 0) > 0;
+	}
+
+	/**
+	 * Какие сценарии заходят: по каждому — сколько выпадал, доля ответов с
+	 * хоть какой-то реакцией/реплаем, средние реакции/реплаи/длина/задержка.
+	 * Только записи с привязанным сообщением (botMessageId) — у старых
+	 * записей реакции не собирались вовсе, они бы занижали средние нулями.
+	 */
+	async scenarioStats(days = 30): Promise<ScenarioStatsRow[]> {
+		const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+		const rows = await this.repo
+			.createQueryBuilder("u")
+			.select("u.scenario", "scenario")
+			.addSelect("COUNT(*)", "calls")
+			.addSelect("AVG(CASE WHEN u.reactions + u.replies > 0 THEN 1 ELSE 0 END)", "engagedShare")
+			.addSelect("AVG(u.reactions)", "avgReactions")
+			.addSelect("AVG(u.replies)", "avgReplies")
+			.addSelect("AVG(LENGTH(u.reply_text))", "avgReplyLength")
+			.addSelect("AVG(u.latency_ms)", "avgLatencyMs")
+			.where("u.createdAt >= :since", { since })
+			.andWhere("u.scenario <> ''")
+			.andWhere("u.bot_message_id IS NOT NULL")
+			.groupBy("u.scenario")
+			.orderBy('"engagedShare"', "DESC")
+			.addOrderBy('"avgReactions"', "DESC")
+			.getRawMany<Record<keyof ScenarioStatsRow, string>>();
+
+		return rows.map((row) => ({
+			scenario: row.scenario,
+			calls: Number(row.calls),
+			engagedShare: Number(row.engagedShare),
+			avgReactions: Number(row.avgReactions),
+			avgReplies: Number(row.avgReplies),
+			avgReplyLength: Number(row.avgReplyLength),
+			avgLatencyMs: Number(row.avgLatencyMs),
+		}));
 	}
 
 	/** Сколько AI-вызовов было в чате за последние 24 часа — дневной кап на чат, страховка по частоте. */

@@ -26,6 +26,16 @@ function pickRandom<T>(items: T[]): T {
 	return items[Math.floor(Math.random() * items.length)]!;
 }
 
+const FILLER_WORDS = new Set(["эй", "ну", "слышь", "алло", "ало", "ау", "ой", "так", "вот"]);
+
+/** Есть ли в тексте обращения что-то кроме самого имени и междометий — тогда отвечаем по существу. */
+function hasMeaningfulWords(text: string): boolean {
+	return text
+		.toLowerCase()
+		.split(/[^\p{L}\p{N}]+/u)
+		.some((word) => word.length >= 3 && !FILLER_WORDS.has(word));
+}
+
 const API_KEYS: Record<ProviderId, string> = {
 	deepseek: appConfig.DEEPSEEK_API_KEY,
 	openai: appConfig.OPENAI_API_KEY,
@@ -112,6 +122,16 @@ export function createAiFunPart(): PartDefinition {
 
 				const chatId = String(chat.id);
 				const threadId = getThreadId(ctx);
+
+				// Реплай на сообщение бота — сигнал, что ответ зацепил (для
+				// статистики сценариев в панели). В форум-темах reply_to_message
+				// без явного реплая указывает на служебное сообщение создания
+				// темы — его автор не бот, так что под условие оно не попадает.
+				const repliedTo = ctx.message.reply_to_message;
+				if (repliedTo?.from?.id && repliedTo.from.id === ctx.botInfo?.id) {
+					await repos.aiUsage.incrementReplies(chatId, String(repliedTo.message_id)).catch((err) => logger.warn("Не удалось учесть реплай на ответ бота", { chatId }, err));
+				}
+
 				const topic = await repos.topics.get(chatId, threadId);
 				if (!topic) return next();
 
@@ -166,7 +186,8 @@ export function createAiFunPart(): PartDefinition {
 
 				const kind: AiUsageKind = isTriggered ? "trigger" : "gacha";
 				const botName = displayName(ctx.botInfo) ?? "бот";
-				const context = await buildChatContext(repos.messages, chatId, threadId, config, botName);
+				const botTgId = ctx.botInfo?.id ? String(ctx.botInfo.id) : undefined;
+				const context = await buildChatContext(repos.messages, chatId, threadId, config, botName, botTgId);
 
 				// Раньше триггер по имени получал только голую инструкцию "тебе
 				// написали, ответь" — без сценария на выбор, в отличие от гачи
@@ -197,9 +218,11 @@ export function createAiFunPart(): PartDefinition {
 
 				// Голое обращение ("Реня" без ничего ещё) не даёт модели ничего,
 				// к чему привязать "ответь по существу" — кроме случая, когда это
-				// реплай (тогда цитата и есть содержание). Порог 12 символов —
-				// произвольный, но короче обычно только само триггер-слово с
-				// частицами ("реня", "эй реня").
+				// реплай (тогда цитата и есть содержание). Раньше порог был 12
+				// символов, и короткие, но содержательные обращения ("Реня
+				// манда", "Реня ты где") уходили в ветку "позвали без повода" —
+				// бот отвечал мимо сказанного. Теперь содержание — любое слово
+				// из 3+ букв после вычета имени, кроме пустых междометий.
 				const strippedText = config.triggerWords
 					.reduce((acc, word) => {
 						if (!word) return acc;
@@ -207,7 +230,7 @@ export function createAiFunPart(): PartDefinition {
 						return acc.replace(new RegExp(escaped, "gi"), "");
 					}, text)
 					.trim();
-				const hasRealContent = strippedText.length >= 12 || Boolean(quotedText);
+				const hasRealContent = hasMeaningfulWords(strippedText) || Boolean(quotedText);
 
 				const action = isTriggered
 					? hasRealContent
@@ -231,8 +254,25 @@ export function createAiFunPart(): PartDefinition {
 				// запрос (сеть/лимиты провайдера) не должен сжигать окно.
 				await markCooldown(repos.settings, chatId);
 
+				// Ответ — реплаем на то, к чему он относится: на вызов по имени —
+				// на сам вызов, на шутку про {target} — на его последнее
+				// сообщение, иначе — на последнее сообщение чата (текущее). Без
+				// этого в активном чате было непонятно, кому и на что бот
+				// отвечает. allow_sending_without_reply — если сообщение успели
+				// удалить, ответ всё равно уйдёт, просто без цитаты.
+				const replyToMessageId = (!isTriggered && picked.target && context.lastMessageIdByName[picked.target]) || String(ctx.message.message_id);
+				let botMessageId: string | null = null;
 				for (const chunk of cropTextForMessage(reply.text)) {
-					await ctx.telegram.sendMessage(chatId, chunk, { message_thread_id: toThreadIdParam(threadId) }).catch(() => {});
+					const sent: { message_id: number } | null = await ctx.telegram
+						.sendMessage(chatId, chunk, {
+							message_thread_id: toThreadIdParam(threadId),
+							reply_parameters: botMessageId ? undefined : { message_id: Number(replyToMessageId), allow_sending_without_reply: true },
+						})
+						.catch((err) => {
+							logger.warn("Не удалось отправить AI-ответ", { chatId, threadId }, err);
+							return null;
+						});
+					if (sent && !botMessageId) botMessageId = String(sent.message_id);
 				}
 
 				// Свои же реплики бот раньше нигде не сохранял (messages.save
@@ -241,7 +281,7 @@ export function createAiFunPart(): PartDefinition {
 				// собственным словам бота, не только к чужим. botName исключён из
 				// activeParticipants в buildChatContext — бот не должен шутить/
 				// докапываться сам на себя.
-				await repos.messages.save({ chatId, threadId, tgId: String(ctx.botInfo?.id ?? "0"), fromName: botName, text: reply.text });
+				await repos.messages.save({ chatId, threadId, tgId: botTgId ?? "0", fromName: botName, text: reply.text, messageId: botMessageId });
 
 				const costUsd = estimateCostUsd(reply.promptTokens, reply.completionTokens, config.providers[config.provider]);
 				await repos.aiUsage.record({
@@ -255,9 +295,40 @@ export function createAiFunPart(): PartDefinition {
 					promptTokens: reply.promptTokens,
 					completionTokens: reply.completionTokens,
 					costUsd,
+					scenario: picked.template,
+					model: reply.model,
+					latencyMs: reply.latencyMs,
+					botMessageId,
 				});
-				logger.info("AI replied", { chatId, threadId, kind, provider: config.provider, costUsd });
+				logger.info("AI replied", { chatId, threadId, kind, provider: config.provider, costUsd, latencyMs: reply.latencyMs });
 
+				return next();
+			});
+
+			// Реакции на ответы бота — главный сигнал "зашло/не зашло" для
+			// статистики сценариев. Любая реакция считается плюсом. Приходят,
+			// только если бот админ и "message_reaction" есть в allowed_updates
+			// вебхука (см. create-bot-app.ts). Реакции на чужие сообщения тоже
+			// прилетают — addReactions просто не найдёт записи и ничего не
+			// изменит.
+			composer.on("message_reaction", async (ctx, next) => {
+				const update = ctx.update.message_reaction;
+				const delta = update.new_reaction.length - update.old_reaction.length;
+				if (delta !== 0) {
+					await repos.aiUsage
+						.addReactions(String(update.chat.id), String(update.message_id), delta)
+						.catch((err) => logger.warn("Не удалось учесть реакцию", { chatId: String(update.chat.id) }, err));
+				}
+				return next();
+			});
+
+			// Анонимные реакции (от имени чата/канала) — приходят итоговым числом по каждой эмодзи.
+			composer.on("message_reaction_count", async (ctx, next) => {
+				const update = ctx.update.message_reaction_count;
+				const total = update.reactions.reduce((sum, r) => sum + r.total_count, 0);
+				await repos.aiUsage
+					.setReactions(String(update.chat.id), String(update.message_id), total)
+					.catch((err) => logger.warn("Не удалось учесть реакции", { chatId: String(update.chat.id) }, err));
 				return next();
 			});
 

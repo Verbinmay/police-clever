@@ -11,6 +11,9 @@ export interface AiReply {
 	text: string;
 	promptTokens: number;
 	completionTokens: number;
+	model: string;
+	/** От первой попытки до ответа, включая ретраи — задержка, которую реально видит чат. */
+	latencyMs: number;
 }
 
 /**
@@ -48,6 +51,7 @@ export function createAiClient(provider: ProviderModelConfig, apiKey: string, pr
 		 * ломает парсинг — там передаём false.
 		 */
 		async getReply(systemPrompt: string, dialogText: string, logger: Logger, maxTokens: number = DEFAULT_MAX_TOKENS, options?: { stripQuotes?: boolean }): Promise<AiReply | null> {
+			const startedAt = Date.now();
 			for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
 				try {
 					const params: Record<string, unknown> = {
@@ -97,6 +101,8 @@ export function createAiClient(provider: ProviderModelConfig, apiKey: string, pr
 						text: stripQuotes ? text.replace(/"/g, "") : text,
 						promptTokens: response.usage?.prompt_tokens ?? 0,
 						completionTokens: response.usage?.completion_tokens ?? 0,
+						model: provider.model,
+						latencyMs: Date.now() - startedAt,
 					};
 				} catch (err) {
 					if (attempt === MAX_RETRIES) {

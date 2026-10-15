@@ -8,6 +8,7 @@ export interface SaveMessageInput {
 	tgId: string;
 	fromName: string | null;
 	text: string;
+	messageId?: string | null;
 }
 
 export class MessagesRepository {

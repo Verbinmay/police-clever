@@ -58,7 +58,7 @@ export function createCorePart(): PartDefinition {
 
 				const text = ctx.message && "text" in ctx.message ? ctx.message.text : undefined;
 				if (text && (topic.aiJokesEnabled || topic.muteVoteEnabled || registeredChat.birthdaysEnabled)) {
-					await repos.messages.save({ chatId, threadId, tgId: String(from.id), fromName: displayName(from), text });
+					await repos.messages.save({ chatId, threadId, tgId: String(from.id), fromName: displayName(from), text, messageId: ctx.message ? String(ctx.message.message_id) : null });
 				}
 
 				return next();

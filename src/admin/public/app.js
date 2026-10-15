@@ -365,8 +365,12 @@ function formatUsd(n) {
 	return `$${Number(n).toFixed(4)}`;
 }
 
+function formatLatency(ms) {
+	return ms ? `${(ms / 1000).toFixed(1)} с` : "—";
+}
+
 async function loadAiStats() {
-	const { daily, byChat, budget } = await api("/ai-stats");
+	const { daily, byChat, scenarios, budget } = await api("/ai-stats");
 
 	el("budget-provider").textContent = budget.provider;
 	el("budget-today").textContent = formatUsd(budget.todayCostUsd);
@@ -391,6 +395,28 @@ async function loadAiStats() {
 		)
 		.join("");
 
+	renderSimpleTable(
+		el("ai-stats-scenarios"),
+		[
+			{ label: "Сценарий", className: "wrap" },
+			{ label: "Ответов", className: "num" },
+			{ label: "Отклик", className: "num" },
+			{ label: "Реакций в ср.", className: "num" },
+			{ label: "Реплаев в ср.", className: "num" },
+			{ label: "Длина", className: "num" },
+			{ label: "Задержка", className: "num" },
+		],
+		scenarios.map((r) => [
+			escapeHtml(r.scenario),
+			r.calls,
+			`${Math.round(r.engagedShare * 100)}%`,
+			r.avgReactions.toFixed(1),
+			r.avgReplies.toFixed(1),
+			Math.round(r.avgReplyLength),
+			formatLatency(r.avgLatencyMs),
+		]),
+	);
+
 	const chatsBody = document.querySelector("#ai-stats-chats-table tbody");
 	chatsBody.innerHTML = byChat.map((row) => `<tr><td>${row.chatId}</td><td>${row.calls}</td><td>${formatUsd(row.costUsd)}</td></tr>`).join("");
 }
@@ -414,18 +440,22 @@ async function loadAiReplies() {
 			<td>${r.threadId}</td>
 			<td>${r.kind}</td>
 			<td class="wrap">${escapeHtml(r.replyText)}</td>
+			<td>${r.botMessageId ? r.reactions : "—"}</td>
+			<td>${r.botMessageId ? r.replies : "—"}</td>
+			<td>${formatLatency(r.latencyMs)}</td>
 			<td>${formatUsd(r.costUsd)}</td>
 		`;
 
 		const detailRow = document.createElement("tr");
 		detailRow.hidden = true;
 		const detailCell = document.createElement("td");
-		detailCell.colSpan = 6;
+		detailCell.colSpan = 9;
 		detailCell.className = "wrap";
 		detailCell.innerHTML = `
 			<p><strong>Промпт (system):</strong><br>${escapeHtml(r.promptText)}</p>
 			<p><strong>Контекст (user):</strong><br>${escapeHtml(r.userContent)}</p>
-			<p class="hint">provider: ${r.provider}, prompt_tokens: ${r.promptTokens}, completion_tokens: ${r.completionTokens}</p>
+			${r.scenario ? `<p><strong>Сценарий:</strong> ${escapeHtml(r.scenario)}</p>` : ""}
+			<p class="hint">provider: ${r.provider}${r.model ? ` (${escapeHtml(r.model)})` : ""}, prompt_tokens: ${r.promptTokens}, completion_tokens: ${r.completionTokens}</p>
 		`;
 		detailRow.appendChild(detailCell);
 
