@@ -6,8 +6,6 @@ export interface ChatContext {
 	dialogText: string;
 	/** Уникальные ники за последние activeParticipantsLookback сообщений, самые свежие первыми. */
 	activeParticipants: string[];
-	/** Ник → message_id его последнего сообщения в окне — чтобы шутку про {target} отправить реплаем именно на его сообщение. */
-	lastMessageIdByName: Record<string, string>;
 }
 
 /** Пометка своих реплик в контексте — тот же текст объясняется модели в promptTemplate. */
@@ -39,13 +37,11 @@ export async function buildChatContext(messages: MessagesRepository, chatId: str
 	// шутки ({target} подставляется случайным активным участником, scenario.ts).
 	const participantsWindow = rows.slice(-config.activeParticipantsLookback);
 	const activeParticipants: string[] = [];
-	const lastMessageIdByName: Record<string, string> = {};
 	for (let i = participantsWindow.length - 1; i >= 0; i--) {
 		const row = participantsWindow[i];
 		const name = row?.fromName;
 		if (!row || !name || isBotRow(row)) continue;
 		if (!activeParticipants.includes(name)) activeParticipants.push(name);
-		if (row.messageId && !(name in lastMessageIdByName)) lastMessageIdByName[name] = row.messageId;
 	}
 
 	const lines: string[] = [];
@@ -65,7 +61,7 @@ export async function buildChatContext(messages: MessagesRepository, chatId: str
 		usedChars += line.length;
 	}
 
-	return { dialogText: lines.join("\n"), activeParticipants, lastMessageIdByName };
+	return { dialogText: lines.join("\n"), activeParticipants };
 }
 
 /** Порт `createPromt` из старого `ai.service.ts`, теперь принимает уже выбранный текст сценария (см. scenario.ts). */

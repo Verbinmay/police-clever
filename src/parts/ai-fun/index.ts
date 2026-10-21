@@ -239,19 +239,20 @@ export function createAiFunPart(): PartDefinition {
 						return next();
 					}
 
-					// Ответ — реплаем на то, к чему он относится: на вызов по имени —
-					// на сам вызов, на шутку про {target} — на его последнее
-					// сообщение, иначе — на последнее сообщение чата (текущее). Без
-					// этого в активном чате было непонятно, кому и на что бот
-					// отвечает. allow_sending_without_reply — если сообщение успели
-					// удалить, ответ всё равно уйдёт, просто без цитаты.
-					const replyToMessageId = (!isTriggered && picked.target && context.lastMessageIdByName[picked.target]) || String(ctx.message.message_id);
+					// Вызов по имени — реплаем на сам вызов (он всегда свежий, видно,
+					// кому бот отвечает). Гача — обычным сообщением, без реплая: с
+					// 15.10 по 21.10 шутка про {target} уходила реплаем на последнее
+					// сообщение цели в окне из 30 строк, а оно бывало многочасовой
+					// давности — в чате выглядело как ответ невпопад на старое.
+					// allow_sending_without_reply — если вызов успели удалить, ответ
+					// всё равно уйдёт, просто без цитаты.
+					const replyToMessageId = isTriggered ? ctx.message.message_id : undefined;
 					let botMessageId: string | null = null;
 					for (const chunk of cropTextForMessage(reply.text)) {
 						const sent: { message_id: number } | null = await ctx.telegram
 							.sendMessage(chatId, chunk, {
 								message_thread_id: toThreadIdParam(threadId),
-								reply_parameters: botMessageId ? undefined : { message_id: Number(replyToMessageId), allow_sending_without_reply: true },
+								reply_parameters: botMessageId || !replyToMessageId ? undefined : { message_id: replyToMessageId, allow_sending_without_reply: true },
 							})
 							.catch((err) => {
 								logger.warn("Не удалось отправить AI-ответ", { chatId, threadId }, err);
